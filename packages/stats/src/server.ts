@@ -251,7 +251,6 @@ async function handleApiRequest(req: Request): Promise<Response> {
 	const url = new URL(req.url);
 	const path = url.pathname;
 
-
 	if (path.startsWith("/api/stats/") || path === "/api/stats") {
 		if (req.method !== "GET") return methodNotAllowed("GET");
 	}
@@ -291,14 +290,18 @@ async function handleApiRequest(req: Request): Promise<Response> {
 		);
 	}
 
-	const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(timeline|events|logs|reveal|requests|tools|usage))?$/.exec(path);
+	const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(timeline|events|logs|reveal|requests|tools|usage))?$/.exec(
+		path,
+	);
 	if (sessionMatch) {
 		const sessionId = decodeURIComponent(sessionMatch[1]);
 		const child = sessionMatch[2];
 		if (child === "reveal") {
 			if (req.method !== "POST") return methodNotAllowed("POST");
 			const result = await reveal("session", sessionId, await requestFields(req));
-			return result ? jsonResponse(result, { headers: { "Cache-Control": "no-store" } }) : new Response("Not Found", { status: 404 });
+			return result
+				? jsonResponse(result, { headers: { "Cache-Control": "no-store" } })
+				: new Response("Not Found", { status: 404 });
 		}
 		if (req.method !== "GET") return methodNotAllowed("GET");
 		// Requests/tools/usage read the already-indexed messages table. Ingest
@@ -310,7 +313,10 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			if (!ingest.ok && !ingest.snapshot) return new Response("Not Found", { status: 404 });
 		}
 		if (child === "requests") {
-			const result = await listResourceRequests("sessions", sessionId, { ...pageOptions(url), errorsOnly: url.searchParams.get("errors") === "true" });
+			const result = await listResourceRequests("sessions", sessionId, {
+				...pageOptions(url),
+				errorsOnly: url.searchParams.get("errors") === "true",
+			});
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}
 		if (child === "tools") {
@@ -322,7 +328,14 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}
 		const options = { ...pageOptions(url), sessionId };
-		const result = child === "timeline" ? await listTimeline(options) : child === "events" ? await listEvents(options) : child === "logs" ? await listLogs(options) : await getSession(sessionId);
+		const result =
+			child === "timeline"
+				? await listTimeline(options)
+				: child === "events"
+					? await listEvents(options)
+					: child === "logs"
+						? await listLogs(options)
+						: await getSession(sessionId);
 		return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 	}
 
@@ -333,7 +346,9 @@ async function handleApiRequest(req: Request): Promise<Response> {
 		if (child === "reveal") {
 			if (req.method !== "POST") return methodNotAllowed("POST");
 			const result = await reveal("run", runId, await requestFields(req));
-			return result ? jsonResponse(result, { headers: { "Cache-Control": "no-store" } }) : new Response("Not Found", { status: 404 });
+			return result
+				? jsonResponse(result, { headers: { "Cache-Control": "no-store" } })
+				: new Response("Not Found", { status: 404 });
 		}
 		if (req.method !== "GET") return methodNotAllowed("GET");
 		const before = await getRun(runId);
@@ -342,7 +357,10 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			for (const sessionId of before.sessionIds) await ingestSessionDetail(sessionId);
 		}
 		if (child === "requests") {
-			const result = await listResourceRequests("runs", runId, { ...pageOptions(url), errorsOnly: url.searchParams.get("errors") === "true" });
+			const result = await listResourceRequests("runs", runId, {
+				...pageOptions(url),
+				errorsOnly: url.searchParams.get("errors") === "true",
+			});
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}
 		if (child === "tools") {
@@ -354,7 +372,14 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}
 		const options = { ...pageOptions(url), runId };
-		const result = child === "timeline" ? await listTimeline(options) : child === "events" ? await listEvents(options) : child === "logs" ? await listLogs(options) : await getRun(runId);
+		const result =
+			child === "timeline"
+				? await listTimeline(options)
+				: child === "events"
+					? await listEvents(options)
+					: child === "logs"
+						? await listLogs(options)
+						: await getRun(runId);
 		return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 	}
 
@@ -445,8 +470,6 @@ async function handleApiRequest(req: Request): Promise<Response> {
 		return jsonResponse(details);
 	}
 
-	
-
 	if (path === "/api/stats/gain") {
 		const project = url.searchParams.get("project");
 		const stats = await getGainDashboardStats(range, project);
@@ -460,7 +483,8 @@ export async function handleApi(req: Request): Promise<Response> {
 	try {
 		return await handleApiRequest(req);
 	} catch (error) {
-		if (error instanceof ObservabilityQueryError) return jsonResponse({ error: error.message }, { status: error.status });
+		if (error instanceof ObservabilityQueryError)
+			return jsonResponse({ error: error.message }, { status: error.status });
 		throw error;
 	}
 }

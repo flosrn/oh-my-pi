@@ -14,13 +14,13 @@ import type {
 	BehaviorTimeSeriesPoint,
 	CostTimeSeriesPoint,
 	FolderStats,
-	ParsedObservabilityEntry,
-	ParsedSessionExit,
-	ParsedSessionHeader,
 	MessageStats,
 	ModelPerformancePoint,
 	ModelStats,
 	ModelTimeSeriesPoint,
+	ParsedObservabilityEntry,
+	ParsedSessionExit,
+	ParsedSessionHeader,
 	ProviderAggregate,
 	ProviderHourlyPoint,
 	ProviderTimeSeriesPoint,
@@ -307,9 +307,9 @@ export async function initDb(): Promise<Database> {
 			db.run(`ALTER TABLE file_offsets ADD COLUMN ${name} ${definition}`);
 		}
 	}
-	const observabilityBackfillRow = db.prepare("SELECT value FROM meta WHERE key = ?").get(
-		OBSERVABILITY_BACKFILL_KEY,
-	) as { value: string } | undefined;
+	const observabilityBackfillRow = db
+		.prepare("SELECT value FROM meta WHERE key = ?")
+		.get(OBSERVABILITY_BACKFILL_KEY) as { value: string } | undefined;
 	db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)").run(
 		OBSERVABILITY_BACKFILL_KEY,
 		BACKFILL_PENDING,
@@ -559,9 +559,7 @@ export function getFileOffset(sessionFile: string): FileOffset | null {
 	if (!db) return null;
 
 	const row = db
-		.prepare(
-			"SELECT offset, last_modified, inode, dev, size, generation FROM file_offsets WHERE session_file = ?",
-		)
+		.prepare("SELECT offset, last_modified, inode, dev, size, generation FROM file_offsets WHERE session_file = ?")
 		.get(sessionFile) as
 		| {
 				offset: number;
@@ -603,15 +601,7 @@ export function setFileOffset(
 			dev = excluded.dev,
 			size = excluded.size,
 			generation = excluded.generation
-	`).run(
-		sessionFile,
-		offset,
-		lastModified,
-		identity.inode,
-		identity.dev,
-		identity.size,
-		identity.generation,
-	);
+	`).run(sessionFile, offset, lastModified, identity.inode, identity.dev, identity.size, identity.generation);
 }
 
 export function runStatsTransaction<T>(fn: () => T): T {
@@ -714,9 +704,7 @@ export function applyObservabilityProjection(input: ObservabilityProjectionInput
 			run_id, decision_id, payload_json
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
-	const insertRun = db.prepare(
-		"INSERT OR IGNORE INTO obs_runs (run_id, started_at, indexed_at) VALUES (?, ?, ?)",
-	);
+	const insertRun = db.prepare("INSERT OR IGNORE INTO obs_runs (run_id, started_at, indexed_at) VALUES (?, ?, ?)");
 	const insertAssignment = db.prepare(`
 		INSERT OR IGNORE INTO obs_run_assignments (
 			run_id, session_id, session_file, entry_id, timestamp
@@ -758,11 +746,13 @@ export interface ObservabilitySessionSnapshot {
 
 export function getObservabilitySessionSnapshot(sessionId: string): ObservabilitySessionSnapshot | null {
 	if (!db) return null;
-	const row = db.prepare(`
+	const row = db
+		.prepare(`
 		SELECT id, session_file, status, indexed_at, indexed_through,
 			source_mtime, source_size, generation
 		FROM obs_sessions WHERE id = ?
-	`).get(sessionId) as
+	`)
+		.get(sessionId) as
 		| {
 				id: string;
 				session_file: string;
@@ -874,7 +864,6 @@ interface ObservabilityDecisionDbRow {
 	payload_json: string;
 }
 
-
 function rowToObservabilitySession(row: ObservabilitySessionDbRow): ObservabilitySessionRow {
 	return {
 		id: row.id,
@@ -950,24 +939,23 @@ export interface ObservabilityRelatedTranscript {
 export function listObservabilityRelatedTranscripts(leadSessionId: string): ObservabilityRelatedTranscript[] {
 	if (!db) return [];
 	const rows = db
-		.prepare(
-			"SELECT id, kind FROM obs_related_transcripts WHERE lead_session_id = ? ORDER BY kind, id",
-		)
+		.prepare("SELECT id, kind FROM obs_related_transcripts WHERE lead_session_id = ? ORDER BY kind, id")
 		.all(leadSessionId) as Array<{ id: string; kind: string }>;
 	return rows.map(row => ({ executionId: row.id, kind: row.kind }));
 }
 
-
 export function listObservabilityRuns(): ObservabilityRunRow[] {
 	if (!db) return [];
-	const rows = db.prepare(`
+	const rows = db
+		.prepare(`
 		SELECT r.run_id, r.started_at, r.indexed_at,
 			GROUP_CONCAT(DISTINCT a.session_id) AS session_ids
 		FROM obs_runs r
 		LEFT JOIN obs_run_assignments a ON a.run_id = r.run_id
 		GROUP BY r.run_id
 		ORDER BY r.started_at DESC, r.run_id DESC
-	`).all() as unknown as ObservabilityRunDbRow[];
+	`)
+		.all() as unknown as ObservabilityRunDbRow[];
 	return rows.map(row => ({
 		runId: row.run_id,
 		startedAt: row.started_at,
@@ -983,7 +971,9 @@ export function getObservabilityRun(runId: string): ObservabilityRunRow | null {
 export function getObservabilityRunIdsForSession(sessionId: string): string[] {
 	if (!db) return [];
 	return (
-		db.prepare("SELECT DISTINCT run_id FROM obs_run_assignments WHERE session_id = ? ORDER BY timestamp").all(sessionId) as Array<{
+		db
+			.prepare("SELECT DISTINCT run_id FROM obs_run_assignments WHERE session_id = ? ORDER BY timestamp")
+			.all(sessionId) as Array<{
 			run_id: string;
 		}>
 	).map(row => row.run_id);
@@ -1010,14 +1000,16 @@ export function listObservabilityTimeline(input: {
 		values.push(...input.kinds);
 	}
 	if (clauses.length === 0) return [];
-	const rows = db.prepare(`
+	const rows = db
+		.prepare(`
 		SELECT t.*, COALESCE(rt.id, s.id, t.session_id) AS execution_id
 		FROM obs_timeline t
 		LEFT JOIN obs_related_transcripts rt ON rt.session_file = t.session_file
 		LEFT JOIN obs_sessions s ON s.session_file = t.session_file
 		WHERE ${clauses.join(" AND ")}
 		ORDER BY t.timestamp ASC, t.entry_id ASC
-	`).all(...values) as unknown as ObservabilityTimelineDbRow[];
+	`)
+		.all(...values) as unknown as ObservabilityTimelineDbRow[];
 	return rows.map(row => ({
 		sessionId: row.session_id,
 		sessionFile: row.session_file,
@@ -1034,9 +1026,9 @@ export function listObservabilityTimeline(input: {
 
 export function getObservabilityDecision(decisionId: string): ObservabilityDecisionRow | null {
 	if (!db) return null;
-	const row = db.prepare(
-		"SELECT decision_id, kind, timestamp, payload_json FROM obs_routing_audit WHERE decision_id = ?",
-	).get(decisionId) as ObservabilityDecisionDbRow | undefined;
+	const row = db
+		.prepare("SELECT decision_id, kind, timestamp, payload_json FROM obs_routing_audit WHERE decision_id = ?")
+		.get(decisionId) as ObservabilityDecisionDbRow | undefined;
 	return row
 		? {
 				decisionId: row.decision_id,
@@ -1072,9 +1064,7 @@ export function getAuditOffset(logPath: string): AuditOffset | null {
 	const row = db
 		.prepare("SELECT offset, last_modified, generation FROM obs_audit_offsets WHERE path = ?")
 		.get(logPath) as { offset: number; last_modified: number; generation: number } | undefined;
-	return row
-		? { offset: row.offset, lastModified: row.last_modified, generation: row.generation }
-		: null;
+	return row ? { offset: row.offset, lastModified: row.last_modified, generation: row.generation } : null;
 }
 
 export function applyRoutingAuditRecords(
@@ -1744,8 +1734,7 @@ function sessionFileInClause(sessionFiles: string[]): { sql: string; params: str
 	return { sql: sessionFiles.map(() => "?").join(", "), params: sessionFiles };
 }
 
-const MESSAGE_ERROR_SQL =
-	"(stop_reason = 'error' OR (error_message IS NOT NULL AND error_message <> ''))";
+const MESSAGE_ERROR_SQL = "(stop_reason = 'error' OR (error_message IS NOT NULL AND error_message <> ''))";
 
 export function listMessagesForSessionFiles(
 	sessionFiles: string[],

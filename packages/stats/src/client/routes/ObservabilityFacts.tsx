@@ -1,13 +1,8 @@
 import { useMemo } from "react";
+import type { ObservabilityPage, ObservabilityRequest, SessionUsageSummary, ToolUsageStats } from "../../shared-types";
 import { getResourceRequests, getResourceTools, getResourceUsage } from "../api";
 import { formatCost, formatInteger, formatRelativeTime } from "../data/formatters";
 import { useResource } from "../data/useResource";
-import type {
-	ObservabilityPage,
-	ObservabilityRequest,
-	SessionUsageSummary,
-	ToolUsageStats,
-} from "../../shared-types";
 import { AsyncBoundary, DataTable, EmptyState, Panel, StatusPill } from "../ui";
 
 function usageTokens(value: unknown): number | null {
@@ -109,7 +104,9 @@ export function ResourceRequestsPanel({
 				error={page.error}
 				data={page.data}
 				empty={page.data !== null && page.data.items.length === 0}
-				emptyText={errorsOnly ? "No failed requests in this transcript" : "No indexed LLM requests in this transcript"}
+				emptyText={
+					errorsOnly ? "No failed requests in this transcript" : "No indexed LLM requests in this transcript"
+				}
 			>
 				{page.data && (
 					<DataTable
@@ -117,7 +114,9 @@ export function ResourceRequestsPanel({
 						data={page.data.items}
 						keyExtractor={item => item.id ?? item.entryId}
 						onRowClick={item => item.id && onRequestClick?.(item.id)}
-						emptyText={errorsOnly ? "No failed requests in this transcript" : "No indexed LLM requests in this transcript"}
+						emptyText={
+							errorsOnly ? "No failed requests in this transcript" : "No indexed LLM requests in this transcript"
+						}
 					/>
 				)}
 			</AsyncBoundary>
@@ -125,15 +124,7 @@ export function ResourceRequestsPanel({
 	);
 }
 
-export function ResourceToolsPanel({
-	kind,
-	id,
-	active,
-}: {
-	kind: "sessions" | "runs";
-	id: string;
-	active: boolean;
-}) {
+export function ResourceToolsPanel({ kind, id, active }: { kind: "sessions" | "runs"; id: string; active: boolean }) {
 	const page = useResource<ObservabilityPage<ToolUsageStats>>(
 		[kind, id, "tools"],
 		signal => getResourceTools(kind, id, signal),
@@ -199,11 +190,10 @@ export function ResourceUsagePanel({
 	active: boolean;
 	mode: "tokens" | "models";
 }) {
-	const usage = useResource<SessionUsageSummary>(
-		[kind, id, "usage"],
-		signal => getResourceUsage(kind, id, signal),
-		{ pollMs: 30_000, enabled: active },
-	);
+	const usage = useResource<SessionUsageSummary>([kind, id, "usage"], signal => getResourceUsage(kind, id, signal), {
+		pollMs: 30_000,
+		enabled: active,
+	});
 	const columns = useMemo(
 		() => [
 			{
