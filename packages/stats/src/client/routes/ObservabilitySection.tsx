@@ -1,24 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-	getObservabilityTimeline,
-	getRun,
-	getRuns,
-	getSession,
-	getSessions,
-	revealObservabilityFields,
-} from "../api";
-import { formatBytes, formatRelativeTime } from "../data/formatters";
-import {
-	behaviorTimelineItems,
-	displaySessionTitle,
-	normalizeObservabilityOutcome,
-	OBSERVABILITY_OUTCOME_AXIS_LABELS,
-	observabilityResourceUri,
-	type ObservabilityOutcomeView,
-} from "../data/view-models";
-import { formatStatsHash, OBSERVABILITY_TABS, type ObservabilityTab } from "../data/hash-route";
-import { useResource } from "../data/useResource";
-import type { TimeRange } from "../types";
 import type {
 	ObservabilityPage,
 	RunDetail,
@@ -27,6 +7,19 @@ import type {
 	SessionSummary,
 	TimelineItem,
 } from "../../shared-types";
+import { getObservabilityTimeline, getRun, getRuns, getSession, getSessions, revealObservabilityFields } from "../api";
+import { formatBytes, formatRelativeTime } from "../data/formatters";
+import { formatStatsHash, OBSERVABILITY_TABS, type ObservabilityTab } from "../data/hash-route";
+import { useResource } from "../data/useResource";
+import {
+	behaviorTimelineItems,
+	displaySessionTitle,
+	normalizeObservabilityOutcome,
+	OBSERVABILITY_OUTCOME_AXIS_LABELS,
+	type ObservabilityOutcomeView,
+	observabilityResourceUri,
+} from "../data/view-models";
+import type { TimeRange } from "../types";
 import { AsyncBoundary, DataTable, EmptyState, ErrorState, JsonBlock, Panel, StatusPill } from "../ui";
 import {
 	ResourceLogsEmpty,
@@ -82,11 +75,7 @@ function FreshnessStrip(props: {
 	);
 }
 
-function OutcomeCluster({
-	outcome,
-}: {
-	outcome: ObservabilityOutcomeView;
-}) {
+function OutcomeCluster({ outcome }: { outcome: ObservabilityOutcomeView }) {
 	return (
 		<div className="stats-obs-outcome">
 			{Object.entries(outcome).map(([axis, value]) => (
@@ -125,7 +114,12 @@ function RevealList({
 					);
 				}
 				return (
-					<button key={field} type="button" className="stats-button stats-button-secondary" onClick={() => onReveal(field)}>
+					<button
+						key={field}
+						type="button"
+						className="stats-button stats-button-secondary"
+						onClick={() => onReveal(field)}
+					>
 						Reveal {field}
 					</button>
 				);
@@ -267,7 +261,6 @@ function TimelinePanel({
 	);
 }
 
-
 export interface ObservabilitySectionProps {
 	kind: "sessions" | "runs";
 	active: boolean;
@@ -304,10 +297,7 @@ export function ObservabilitySection({
 		listKey,
 		signal =>
 			kind === "sessions"
-				? getSessions(
-						{ range, status, project, failure: failure === "true", q },
-						signal,
-					)
+				? getSessions({ range, status, project, failure: failure === "true", q }, signal)
 				: getRuns({ range, status, project, failure: failure === "true", q }, signal),
 		{ pollMs: 30_000, enabled: active && !id },
 	);
@@ -327,7 +317,10 @@ export function ObservabilitySection({
 		async (field: string) => {
 			if (!id || !active) return;
 			const result = await revealObservabilityFields(kind, id, [field]);
-			setRevealed(current => ({ ...current, ...(result && typeof result === "object" ? (result as Record<string, unknown>) : { [field]: result }) }));
+			setRevealed(current => ({
+				...current,
+				...(result && typeof result === "object" ? (result as Record<string, unknown>) : { [field]: result }),
+			}));
 		},
 		[active, id, kind],
 	);
@@ -376,10 +369,13 @@ export function ObservabilitySection({
 		const record = detail.data as SessionDetail | RunDetail | null;
 		const currentTab = tab ?? "requests";
 		const outcome = normalizeObservabilityOutcome(record?.outcome);
-		const resourceId = kind === "sessions" ? (record as SessionDetail | null)?.sessionId ?? id : (record as RunDetail | null)?.runId ?? id;
+		const resourceId =
+			kind === "sessions"
+				? ((record as SessionDetail | null)?.sessionId ?? id)
+				: ((record as RunDetail | null)?.runId ?? id);
 		const executionId =
 			kind === "sessions"
-				? (record as SessionDetail | null)?.executionId ?? id
+				? ((record as SessionDetail | null)?.executionId ?? id)
 				: ((record as RunDetail | null)?.executionIds.join(", ") ?? "");
 		const session = kind === "sessions" ? (record as SessionDetail | null) : null;
 		const title = session ? displaySessionTitle(session.title) : null;
@@ -410,7 +406,13 @@ export function ObservabilitySection({
 				: `sessions: ${(record as RunDetail | null)?.sessionIds.join(", ") || "none"}`;
 		return (
 			<div className="stats-obs-detail">
-				<AsyncBoundary loading={detail.loading} error={detail.error} data={record} empty={!record} emptyText="Unknown resource">
+				<AsyncBoundary
+					loading={detail.loading}
+					error={detail.error}
+					data={record}
+					empty={!record}
+					emptyText="Unknown resource"
+				>
 					{record && (
 						<>
 							<header className="stats-obs-header">
@@ -423,7 +425,11 @@ export function ObservabilitySection({
 									</div>
 								</div>
 								<div className="stats-obs-copies">
-									<button type="button" className="stats-button stats-button-secondary" onClick={() => copyText(resourceId)}>
+									<button
+										type="button"
+										className="stats-button stats-button-secondary"
+										onClick={() => copyText(resourceId)}
+									>
 										Copy ID
 									</button>
 									<button
@@ -498,7 +504,12 @@ export function ObservabilitySection({
 								<ResourceUsagePanel kind={kind} id={id} active={active} mode="models" />
 							)}
 							{currentTab === "logs-raw" && <ResourceLogsEmpty />}
-							<RevealList available={record.softAvailable} revealed={revealed} onReveal={reveal} active={active} />
+							<RevealList
+								available={record.softAvailable}
+								revealed={revealed}
+								onReveal={reveal}
+								active={active}
+							/>
 						</>
 					)}
 				</AsyncBoundary>
@@ -524,8 +535,12 @@ export function ObservabilitySection({
 						onRowClick={item => onOpen("sessionId" in item ? item.sessionId : item.runId)}
 						renderMobileCard={(item, onClick) => (
 							<div className="stats-mobile-card" onClick={onClick}>
-								<div className="stats-font-semibold">{"sessionId" in item ? displaySessionTitle(item.title) : item.runId}</div>
-								<div className="stats-text-xs stats-text-muted">{"sessionId" in item ? item.sessionId : item.status}</div>
+								<div className="stats-font-semibold">
+									{"sessionId" in item ? displaySessionTitle(item.title) : item.runId}
+								</div>
+								<div className="stats-text-xs stats-text-muted">
+									{"sessionId" in item ? item.sessionId : item.status}
+								</div>
 							</div>
 						)}
 					/>

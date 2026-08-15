@@ -112,7 +112,6 @@ function isCustomEntry(entry: SessionEntry): entry is SessionCustomEntry {
 	);
 }
 
-
 function parseSessionHeader(entry: SessionEntry): ParsedSessionHeader | undefined {
 	if (
 		entry.type !== "session" ||

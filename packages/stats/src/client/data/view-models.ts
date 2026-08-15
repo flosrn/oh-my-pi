@@ -1,3 +1,4 @@
+import type { ObservabilityOutcome, TimelineItem } from "../../shared-types";
 import { rangeMeta } from "../components/range-meta";
 import type {
 	AgentType,
@@ -10,7 +11,6 @@ import type {
 	TimeRange,
 	ToolUsageStats,
 } from "../types";
-import type { ObservabilityOutcome, TimelineItem } from "../../shared-types";
 
 /** Fixed display order for the agent-token-share breakdown. */
 const AGENT_TYPE_ORDER: AgentType[] = ["main", "subagent", "advisor"];
@@ -293,11 +293,7 @@ export function normalizeObservabilityOutcome(
 	};
 }
 
-export function observabilityResourceUri(
-	kind: "sessions" | "runs",
-	id: string,
-	_tab?: string,
-): string {
+export function observabilityResourceUri(kind: "sessions" | "runs", id: string, _tab?: string): string {
 	return `stats://${kind}/${encodeURIComponent(id)}`;
 }
 
