@@ -1371,22 +1371,45 @@
   min-width: 7rem;
 }
 /*
- * A timeline row is one scannable line. The previous shape gave every fact a card
- * whose largest element was a grey box containing an 8-hex entry id nobody reads,
- * fitting six facts on a 1100px screen; the id and the payload are now behind a
- * caret, and the row carries time, kind, the fact, and which execution produced it.
+ * A timeline row is one scannable line: time, kind, the fact, and which execution
+ * produced it. The entry id and the payload sit behind the row's own disclosure.
+ *
+ * The grid lives on `summary`, not on `li`, and that placement is load-bearing.
+ * `grid-column` only governs a grid's DIRECT children, so a `pre` nested inside a
+ * grid item cannot span the row - an earlier revision put the span on the `pre` and
+ * the JSON rendered inside a 1rem column, one character per line. Here the payload is
+ * a sibling of `summary` inside `details`, so it is full width by default and needs
+ * no span at all.
  */
 .stats-obs-timeline {
   display: flex;
   flex-direction: column;
 }
+.stats-obs-fact {
+  border-bottom: 1px solid var(--border);
+}
 .stats-obs-row {
   display: grid;
-  grid-template-columns: 5rem 10rem minmax(0, 1fr) auto 1rem;
+  grid-template-columns: 5rem 10rem minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: baseline;
-  padding: 0.28rem 0.5rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 1.6rem 0.3rem 0.5rem;
+  cursor: pointer;
+  position: relative;
+  list-style: none;
+}
+.stats-obs-row::-webkit-details-marker {
+  display: none;
+}
+.stats-obs-row::after {
+  content: "⌄";
+  position: absolute;
+  right: 0.5rem;
+  color: var(--stats-muted, #888);
+  font-size: 0.7rem;
+}
+.stats-obs-fact[open] > .stats-obs-row::after {
+  content: "⌃";
 }
 .stats-obs-row:hover {
   background: var(--surface-2);
@@ -1423,21 +1446,8 @@
   color: var(--stats-muted, #888);
   white-space: nowrap;
 }
-.stats-obs-payload > summary {
-  cursor: pointer;
-  list-style: none;
-  color: var(--stats-muted, #888);
-  font-size: 0.7rem;
-}
-.stats-obs-payload > summary::after {
-  content: "⌄";
-}
-.stats-obs-payload[open] > summary::after {
-  content: "⌃";
-}
-.stats-obs-payload > pre {
-  grid-column: 1 / -1;
-  margin: 0.35rem 0 0.5rem;
+.stats-obs-payload {
+  margin: 0 0.5rem 0.5rem;
   padding: 0.5rem;
   background: var(--surface-2);
   border-radius: 4px;

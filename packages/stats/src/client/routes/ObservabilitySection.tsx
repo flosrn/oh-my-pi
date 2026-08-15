@@ -261,18 +261,25 @@ function TimelineList({
 						? null
 						: (executionNames[item.executionId] ?? item.executionId.slice(0, 8));
 				return (
-					<li className="stats-obs-row" key={`${item.entryId}:${item.timestamp}`}>
-						<time className="stats-obs-time" dateTime={new Date(item.timestamp).toISOString()}>
-							{new Date(item.timestamp).toLocaleTimeString()}
-						</time>
-						<span className="stats-obs-kind" data-family={family}>
-							{item.kind}
-						</span>
-						<span className="stats-obs-summary">{summary ?? ""}</span>
-						{actor ? <span className="stats-obs-actor">{actor}</span> : <span />}
-						<details className="stats-obs-payload">
-							<summary aria-label={`payload for ${item.entryId}`} />
-							<pre>{JSON.stringify(item.payload, null, 2)}</pre>
+					<li key={`${item.entryId}:${item.timestamp}`}>
+						{/*
+						 * `details` wraps the whole row so the payload is a sibling block at the
+						 * row's full width. A `pre` nested inside a grid ITEM cannot span the grid -
+						 * `grid-column` only governs direct children - so the previous shape left
+						 * the JSON boxed into the 1rem caret column, one character wide.
+						 */}
+						<details className="stats-obs-fact">
+							<summary className="stats-obs-row">
+								<time className="stats-obs-time" dateTime={new Date(item.timestamp).toISOString()}>
+									{new Date(item.timestamp).toLocaleTimeString()}
+								</time>
+								<span className="stats-obs-kind" data-family={family}>
+									{item.kind}
+								</span>
+								<span className="stats-obs-summary">{summary ?? ""}</span>
+								<span className="stats-obs-actor">{actor ?? ""}</span>
+							</summary>
+							<pre className="stats-obs-payload">{JSON.stringify(item.payload, null, 2)}</pre>
 						</details>
 					</li>
 				);
