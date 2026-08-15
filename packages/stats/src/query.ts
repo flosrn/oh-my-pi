@@ -320,7 +320,11 @@ export async function getSession(sessionId: string): Promise<SessionDetail | nul
 		...sessionSummary(row),
 		truncated: row.indexedThrough < row.sourceSize,
 		runIds: getObservabilityRunIdsForSession(sessionId),
-		relatedExecutions: listObservabilityRelatedTranscripts(sessionId),
+		relatedExecutions: listObservabilityRelatedTranscripts(sessionId).map(item => ({
+			executionId: item.executionId,
+			kind: item.kind,
+			name: transcriptName(item.sessionFile),
+		})),
 		usage: total,
 		usageRollup: rollup,
 	};

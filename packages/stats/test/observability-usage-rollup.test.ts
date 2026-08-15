@@ -111,12 +111,19 @@ describe("recursive usage rollup", () => {
 		const detail = (await (await api(`/api/sessions/${LEAD}`)).json()) as {
 			usage: Usage;
 			usageRollup: Rollup;
-			relatedExecutions: Array<{ executionId: string }>;
+			relatedExecutions: Array<{ executionId: string; kind: string; name: string | null }>;
 		};
 
 		// The lead alone is what every number used to mean, and it is still reachable.
 		expect(detail.usageRollup.own.requests).toBe(2);
 		expect(detail.usageRollup.own.totalTokens).toBe(100);
+
+		// R29: a compact DTO omits `sessionFile`. Reading the related transcripts' paths to
+		// build this rollup put an absolute path one careless spread away from the wire.
+		expect(JSON.stringify(detail)).not.toContain("sessionFile");
+		expect(JSON.stringify(detail)).not.toContain(getSessionsDir());
+		// Each child is named, so a timeline row can say WHICH child acted.
+		expect(detail.relatedExecutions.map(item => item.name).sort()).toEqual(["Scout", "__advisor.default"]);
 
 		// The flat numbers are now the recursive total.
 		expect(detail.usage.requests).toBe(4);

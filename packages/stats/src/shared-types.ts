@@ -481,6 +481,13 @@ export interface SessionSummary extends ObservabilityFreshness {
 export interface RelatedExecution {
 	executionId: string;
 	kind: string;
+	/**
+	 * Transcript stem: a dispatched subagent's own name (`IntentLayer`), or
+	 * `__advisor.default`. Without it a timeline row can only show a raw header id,
+	 * which is indistinguishable from the lead's at a glance - so the one fact worth
+	 * having, WHICH child acted, reads as noise.
+	 */
+	name: string | null;
 }
 
 export interface SessionDetail extends SessionSummary {

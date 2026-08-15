@@ -161,7 +161,9 @@ function timelineSummary(item: TimelineItem): string | null {
 			return role ? `${read("model")} · role ${role}` : read("model");
 		}
 		case "thinking_level_change":
-			return read("thinkingLevel");
+			// A null level is a real state - the session published none - and an empty cell
+			// reads as a rendering fault instead of as that fact.
+			return read("thinkingLevel") ?? "unset";
 		case "mode_change":
 			return read("mode");
 		case "session_exit":
@@ -202,23 +204,76 @@ function timelineSummary(item: TimelineItem): string | null {
 	}
 }
 
-function TimelineList({ items, empty }: { items: TimelineItem[]; empty: string }) {
+/**
+ * Families exist so 566 tool calls can be taken out of the way without losing the 60
+ * facts that explain the session. Every page is already loaded (the panel follows every
+ * cursor before rendering), so filtering here hides nothing that a server filter would
+ * have shown.
+ */
+const TIMELINE_FAMILY_BY_KIND: Record<string, string> = {
+	tool_call: "tools",
+	model_change: "routes",
+	thinking_level_change: "routes",
+	mode_change: "routes",
+	peer_message: "agents",
+	child_result: "agents",
+	advisor_message: "agents",
+	progress: "progress",
+	segment: "progress",
+	session_boundary: "lifecycle",
+	session_exit: "lifecycle",
+	compaction: "lifecycle",
+	skill_prompt: "lifecycle",
+};
+
+const TIMELINE_FAMILY_LABELS: Record<string, string> = {
+	tools: "Tools",
+	routes: "Routes",
+	agents: "Agents",
+	progress: "Progress",
+	lifecycle: "Lifecycle",
+	other: "Other",
+};
+
+const TIMELINE_FAMILY_ORDER = ["tools", "routes", "agents", "progress", "lifecycle", "other"];
+
+function TimelineList({
+	items,
+	empty,
+	executionNames,
+	ownExecutionId,
+}: {
+	items: TimelineItem[];
+	empty: string;
+	executionNames: Record<string, string>;
+	ownExecutionId: string | null;
+}) {
 	if (items.length === 0) return <EmptyState message={empty} />;
 	return (
 		<ol className="stats-obs-timeline">
 			{items.map(item => {
 				const summary = timelineSummary(item);
+				const family = TIMELINE_FAMILY_BY_KIND[item.kind] ?? "other";
+				// The execution only earns a column when it is NOT this page's own session:
+				// then it names the child that acted, which is the fact a coordinator wants.
+				const actor =
+					item.executionId === ownExecutionId
+						? null
+						: (executionNames[item.executionId] ?? item.executionId.slice(0, 8));
 				return (
-					<li key={`${item.entryId}:${item.timestamp}`}>
-						<div className="stats-font-medium">
+					<li className="stats-obs-row" key={`${item.entryId}:${item.timestamp}`}>
+						<time className="stats-obs-time" dateTime={new Date(item.timestamp).toISOString()}>
+							{new Date(item.timestamp).toLocaleTimeString()}
+						</time>
+						<span className="stats-obs-kind" data-family={family}>
 							{item.kind}
-							{summary ? <span className="stats-text-muted"> — {summary}</span> : null}
-						</div>
-						<div className="stats-text-xs stats-text-muted">
-							{item.executionId} · {formatRelativeTime(item.timestamp)}
-							{item.decisionId ? ` · ${item.decisionId}` : ""}
-						</div>
-						<JsonBlock data={item.payload} title={item.entryId} initialCollapsed />
+						</span>
+						<span className="stats-obs-summary">{summary ?? ""}</span>
+						{actor ? <span className="stats-obs-actor">{actor}</span> : <span />}
+						<details className="stats-obs-payload">
+							<summary aria-label={`payload for ${item.entryId}`} />
+							<pre>{JSON.stringify(item.payload, null, 2)}</pre>
+						</details>
 					</li>
 				);
 			})}
@@ -233,6 +288,8 @@ function TimelinePanel({
 	status,
 	sourceKey,
 	mode,
+	executionNames,
+	ownExecutionId,
 }: {
 	kind: "sessions" | "runs";
 	id: string;
@@ -240,9 +297,12 @@ function TimelinePanel({
 	status: string;
 	sourceKey: string;
 	mode: "timeline" | "behavior";
+	executionNames: Record<string, string>;
+	ownExecutionId: string | null;
 }) {
 	const [items, setItems] = useState<TimelineItem[]>([]);
 	const [error, setError] = useState<Error | null>(null);
+	const [hiddenFamilies, setHiddenFamilies] = useState<Record<string, true>>({});
 	const cursorRef = useRef<string | undefined>(undefined);
 	const seenRef = useRef(new Set<string>());
 	const terminalCheckedRef = useRef(false);
@@ -323,16 +383,49 @@ function TimelinePanel({
 		};
 	}, [active, id, kind, status, sourceKey]);
 	if (error && items.length === 0) return <ErrorState error={error} />;
-	const visible = mode === "behavior" ? behaviorTimelineItems(items) : items;
+	const scoped = mode === "behavior" ? behaviorTimelineItems(items) : items;
+	const counts: Record<string, number> = {};
+	for (const item of scoped) {
+		const family = TIMELINE_FAMILY_BY_KIND[item.kind] ?? "other";
+		counts[family] = (counts[family] ?? 0) + 1;
+	}
+	const families = TIMELINE_FAMILY_ORDER.filter(family => counts[family]);
+	const visible = scoped.filter(item => !hiddenFamilies[TIMELINE_FAMILY_BY_KIND[item.kind] ?? "other"]);
 	return (
-		<TimelineList
-			items={visible}
-			empty={
-				mode === "behavior"
-					? "No stored segment or progress facts"
-					: "No stored observability facts yet. Indexed LLM calls are on the Requests tab."
-			}
-		/>
+		<>
+			{mode === "timeline" && families.length > 1 && (
+				<div className="stats-obs-filters stats-segmented-control">
+					{families.map(family => (
+						<button
+							className="stats-segmented-control-btn"
+							data-active={hiddenFamilies[family] ? "false" : "true"}
+							key={family}
+							onClick={() =>
+								setHiddenFamilies(current => {
+									const next = { ...current };
+									if (next[family]) delete next[family];
+									else next[family] = true;
+									return next;
+								})
+							}
+							type="button"
+						>
+							{TIMELINE_FAMILY_LABELS[family] ?? family} {counts[family]}
+						</button>
+					))}
+				</div>
+			)}
+			<TimelineList
+				empty={
+					mode === "behavior"
+						? "No stored segment or progress facts"
+						: "No stored observability facts yet. Indexed LLM calls are on the Requests tab."
+				}
+				executionNames={executionNames}
+				items={visible}
+				ownExecutionId={ownExecutionId}
+			/>
+		</>
 	);
 }
 
@@ -455,6 +548,12 @@ export function ObservabilitySection({
 		const session = kind === "sessions" ? (record as SessionDetail | null) : null;
 		const title = session ? displaySessionTitle(session.title) : null;
 		const related = session?.relatedExecutions ?? [];
+		// A child's facts are folded into its lead's timeline, so a row can belong to a
+		// nested transcript. Naming it is the difference between "some uuid" and "IntentLayer".
+		const executionNames: Record<string, string> = {};
+		for (const item of related) {
+			if (item.name) executionNames[item.executionId] = item.name;
+		}
 		const relatedCounts = related.reduce<Record<string, number>>((acc, item) => {
 			acc[item.kind] = (acc[item.kind] ?? 0) + 1;
 			return acc;
@@ -557,6 +656,8 @@ export function ObservabilitySection({
 									status={record.status}
 									sourceKey={`${record.generation}:${record.sourceSize}:${record.sourceModifiedAt}`}
 									mode={currentTab === "behavior" ? "behavior" : "timeline"}
+									executionNames={executionNames}
+									ownExecutionId={executionId || null}
 								/>
 							)}
 							{currentTab === "requests" && (
