@@ -29,6 +29,7 @@ import type {
 	RunSummary,
 	SessionDetail,
 	SessionSummary,
+	SessionUsageRollup,
 	SessionUsageSummary,
 	TimelineItem,
 	ToolUsageStats,
@@ -87,20 +88,38 @@ function credentialKey(key: string): boolean {
 	return normalized.endsWith("token") && !/^(?:input|output|cache|total|reasoning)tokens?$/.test(normalized);
 }
 
+/**
+ * WHY THE GUARD TRACKS THE PATH, NOT EVERY OBJECT EVER SEEN.
+ *
+ * A persistent `WeakSet` cannot tell a cycle from a DAG: the second time any object
+ * is reached it answers `"[Circular]"`, even when the first visit already returned
+ * and the payload is finite. Measured while adding the usage rollup - a DTO that
+ * exposed one summary object under two keys served `"total":"[Circular]"`, silently
+ * replacing real numbers with a string. A caller has no way to tell that apart from
+ * a genuine cycle, which makes it the worst shape of wrong: it looks handled.
+ *
+ * Deleting on the way out bounds recursion exactly as before - a true cycle is still
+ * an ancestor of itself when revisited - and every node is still visited and still
+ * redacted, so nothing about the redaction contract moves.
+ */
 export function hardRedact(value: unknown): unknown {
-	const seen = new WeakSet<object>();
+	const ancestors = new WeakSet<object>();
 	const visit = (candidate: unknown, key?: string): unknown => {
 		if (key && credentialKey(key)) return { ...HARD };
 		if (typeof candidate === "string")
 			return PEM.test(candidate) || AUTH.test(candidate) || NAMED_SECRET.test(candidate) ? { ...HARD } : candidate;
 		if (candidate === null || typeof candidate !== "object") return candidate;
 		if (candidate instanceof Error) return visit(candidate.message);
-		if (seen.has(candidate)) return "[Circular]";
-		seen.add(candidate);
-		if (Array.isArray(candidate)) return candidate.map(item => visit(item));
-		const output: Record<string, unknown> = {};
-		for (const [childKey, child] of Object.entries(candidate)) output[childKey] = visit(child, childKey);
-		return output;
+		if (ancestors.has(candidate)) return "[Circular]";
+		ancestors.add(candidate);
+		try {
+			if (Array.isArray(candidate)) return candidate.map(item => visit(item));
+			const output: Record<string, unknown> = {};
+			for (const [childKey, child] of Object.entries(candidate)) output[childKey] = visit(child, childKey);
+			return output;
+		} finally {
+			ancestors.delete(candidate);
+		}
 	};
 	return visit(value);
 }
@@ -296,12 +315,14 @@ export async function getSession(sessionId: string): Promise<SessionDetail | nul
 	await initDb();
 	const row = getObservabilitySession(sessionId);
 	if (!row) return null;
+	const { rollup, total } = usageRollupFor([row]);
 	return {
 		...sessionSummary(row),
 		truncated: row.indexedThrough < row.sourceSize,
 		runIds: getObservabilityRunIdsForSession(sessionId),
 		relatedExecutions: listObservabilityRelatedTranscripts(sessionId),
-		usage: summarizeMessagesForSessionFiles([row.sessionFile]),
+		usage: total,
+		usageRollup: rollup,
 	};
 }
 
@@ -391,10 +412,12 @@ export async function getRun(runId: string): Promise<RunDetail | null> {
 	const sessions = row.sessionIds
 		.map(id => getObservabilitySession(id))
 		.filter((item): item is ObservabilitySessionRow => item !== null);
+	const { rollup, total } = usageRollupFor(sessions);
 	return {
 		...summary,
 		truncated: summary.indexedThrough < summary.sourceSize,
-		usage: summarizeMessagesForSessionFiles(sessions.map(item => item.sessionFile)),
+		usage: total,
+		usageRollup: rollup,
 	};
 }
 
@@ -499,6 +522,67 @@ function requestDto(message: MessageStats): ObservabilityRequest {
 	};
 }
 
+/**
+ * WHY THE FLAT NUMBERS CHANGED MEANING.
+ *
+ * Every usage figure on a Session page used to come from `[row.sessionFile]` - the
+ * lead transcript alone. Measured on one real session: 107 requests / $17.90 shown,
+ * 336 / $29.57 actually spent, with `claude-sonnet-5` (dispatched scouts, $8.53) and
+ * `grok-4.5` (advisor, $3.14) appearing nowhere. The page even printed
+ * "related: 10 (advisor 1, nested 9)" beside the number that excluded them.
+ *
+ * The contract already decided this: "Recursive totals sum those observations once."
+ * Related transcripts are related transcripts OF that Session (R2), so their spend is
+ * the Session's spend.
+ *
+ * Each member is summarised from its OWN distinct file, and the total is one query
+ * over the whole file set - so an observation cannot be counted twice by
+ * construction, rather than by an addition that has to stay correct.
+ */
+const ROLLUP_RULE = "recursive-rollup@1" as const;
+
+/**
+ * Dispatched subagents are named by their transcript stem (`IntentLayer.jsonl`);
+ * a lead file is `<timestamp>_<id>.jsonl` and has no name of its own.
+ */
+function transcriptName(sessionFile: string): string | null {
+	const stem = sessionFile
+		.split("/")
+		.pop()
+		?.replace(/\.jsonl$/, "");
+	if (!stem || /^\d{4}-\d{2}-\d{2}T/.test(stem)) return null;
+	return stem;
+}
+
+function usageRollupFor(sessions: ObservabilitySessionRow[]): {
+	rollup: SessionUsageRollup;
+	total: SessionUsageSummary;
+} {
+	const ownFiles = sessions.map(item => item.sessionFile);
+	const members = sessions.flatMap(item => listObservabilityRelatedTranscripts(item.id));
+	return {
+		rollup: {
+			rule: ROLLUP_RULE,
+			own: summarizeMessagesForSessionFiles(ownFiles),
+			related: members.map(member => ({
+				executionId: member.executionId,
+				kind: member.kind,
+				name: transcriptName(member.sessionFile),
+				usage: summarizeMessagesForSessionFiles([member.sessionFile]),
+			})),
+		},
+		total: summarizeMessagesForSessionFiles([...ownFiles, ...members.map(member => member.sessionFile)]),
+	};
+}
+
+/** Every actor transcript of a resource: the leads plus their related transcripts. */
+function recursiveFiles(sessions: ObservabilitySessionRow[]): string[] {
+	return [
+		...sessions.map(item => item.sessionFile),
+		...sessions.flatMap(item => listObservabilityRelatedTranscripts(item.id).map(member => member.sessionFile)),
+	];
+}
+
 function resourceSessions(
 	kind: "sessions" | "runs",
 	id: string,
@@ -519,6 +603,13 @@ function resourceSessions(
 
 export interface ResourceQueryOptions extends PageOptions {
 	errorsOnly?: boolean;
+	/**
+	 * `own` lists only the lead transcript's requests; `recursive` adds every related
+	 * transcript's. Default is `own` because this list has no execution column yet, and
+	 * a flat 336-row mix of lead, scouts and advisor reads as soup. The aggregate
+	 * numbers are recursive regardless - they are the ones the contract fixes.
+	 */
+	scope?: "own" | "recursive";
 }
 
 export async function listResourceRequests(
@@ -530,7 +621,10 @@ export async function listResourceRequests(
 	const resource = resourceSessions(kind, id);
 	if (!resource) return null;
 	const limit = pageLimit(options, 100, 200);
-	const files = resource.sessions.map(item => item.sessionFile);
+	const files =
+		options.scope === "recursive"
+			? recursiveFiles(resource.sessions)
+			: resource.sessions.map(item => item.sessionFile);
 	const messages = listMessagesForSessionFiles(files, { limit, errorsOnly: options.errorsOnly });
 	const meta = freshness(resource.sessions, resource.indexedAt);
 	return {
@@ -548,7 +642,9 @@ export async function listResourceTools(
 	await initDb();
 	const resource = resourceSessions(kind, id);
 	if (!resource) return null;
-	const files = resource.sessions.map(item => item.sessionFile);
+	// Recursive: tools aggregate by name, so a dispatched scout's reads belong in
+	// "what did this session use" without needing a new column to stay legible.
+	const files = recursiveFiles(resource.sessions);
 	const items = getToolStatsForSessionFiles(files);
 	const meta = freshness(resource.sessions, resource.indexedAt);
 	return { items, truncated: false, softAvailable: [], usage: summarizeMessagesForSessionFiles(files), ...meta };
@@ -557,13 +653,14 @@ export async function listResourceTools(
 export async function getResourceUsage(
 	kind: "sessions" | "runs",
 	id: string,
-): Promise<(SessionUsageSummary & ObservabilityFreshness) | null> {
+): Promise<(SessionUsageSummary & { rollup: SessionUsageRollup } & ObservabilityFreshness) | null> {
 	await initDb();
 	const resource = resourceSessions(kind, id);
 	if (!resource) return null;
-	const files = resource.sessions.map(item => item.sessionFile);
-	return { ...summarizeMessagesForSessionFiles(files), ...freshness(resource.sessions, resource.indexedAt) };
+	const { rollup, total } = usageRollupFor(resource.sessions);
+	return { ...total, rollup, ...freshness(resource.sessions, resource.indexedAt) };
 }
+
 export async function getRequest(requestId: string): Promise<ObservabilityRequest | null> {
 	await initDb();
 	const message = getMessageByEntryId(requestId);

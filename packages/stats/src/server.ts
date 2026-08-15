@@ -316,6 +316,7 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			const result = await listResourceRequests("sessions", sessionId, {
 				...pageOptions(url),
 				errorsOnly: url.searchParams.get("errors") === "true",
+				scope: url.searchParams.get("scope") === "recursive" ? "recursive" : "own",
 			});
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}
@@ -360,6 +361,7 @@ async function handleApiRequest(req: Request): Promise<Response> {
 			const result = await listResourceRequests("runs", runId, {
 				...pageOptions(url),
 				errorsOnly: url.searchParams.get("errors") === "true",
+				scope: url.searchParams.get("scope") === "recursive" ? "recursive" : "own",
 			});
 			return result ? jsonResponse(result) : new Response("Not Found", { status: 404 });
 		}

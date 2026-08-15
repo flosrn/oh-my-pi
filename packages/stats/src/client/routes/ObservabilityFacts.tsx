@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import type { ObservabilityPage, ObservabilityRequest, SessionUsageSummary, ToolUsageStats } from "../../shared-types";
+import type {
+	ObservabilityPage,
+	ObservabilityRequest,
+	SessionUsageMember,
+	SessionUsageRollup,
+	SessionUsageSummary,
+	ToolUsageStats,
+} from "../../shared-types";
 import { getResourceRequests, getResourceTools, getResourceUsage } from "../api";
 import { formatCost, formatInteger, formatRelativeTime } from "../data/formatters";
 import { useResource } from "../data/useResource";
@@ -190,10 +197,65 @@ export function ResourceUsagePanel({
 	active: boolean;
 	mode: "tokens" | "models";
 }) {
-	const usage = useResource<SessionUsageSummary>([kind, id, "usage"], signal => getResourceUsage(kind, id, signal), {
-		pollMs: 30_000,
-		enabled: active,
-	});
+	const usage = useResource<SessionUsageSummary & { rollup?: SessionUsageRollup }>(
+		[kind, id, "usage"],
+		signal => getResourceUsage(kind, id, signal),
+		{ pollMs: 30_000, enabled: active },
+	);
+	const spenders = useMemo(() => {
+		const rollup = usage.data?.rollup;
+		if (!rollup) return [];
+		// The lead sits in the same table as its children: a coordinator's own tokens are
+		// one line among the executions it dispatched, not a separate privileged figure.
+		return [
+			{ key: "lead", kind: "lead", name: null as string | null, usage: rollup.own },
+			...rollup.related.map((member: SessionUsageMember) => ({
+				key: member.executionId,
+				kind: member.kind,
+				name: member.name,
+				usage: member.usage,
+			})),
+		].filter(row => row.usage.requests > 0);
+	}, [usage.data]);
+	const spenderColumns = useMemo(
+		() => [
+			{
+				key: "execution",
+				header: "Execution",
+				render: (item: (typeof spenders)[number]) => (
+					<div>
+						<div className="stats-font-medium stats-text-primary">{item.name ?? "This session"}</div>
+						<div className="stats-text-xs stats-text-muted">{item.kind}</div>
+					</div>
+				),
+			},
+			{
+				key: "model",
+				header: "Model",
+				render: (item: (typeof spenders)[number]) =>
+					item.usage.byModel.map((model: SessionUsageSummary["byModel"][number]) => model.model).join(", ") || "—",
+			},
+			{
+				key: "requests",
+				header: "Requests",
+				numeric: true,
+				render: (item: (typeof spenders)[number]) => formatInteger(item.usage.requests),
+			},
+			{
+				key: "tokens",
+				header: "Tokens",
+				numeric: true,
+				render: (item: (typeof spenders)[number]) => formatInteger(item.usage.totalTokens),
+			},
+			{
+				key: "cost",
+				header: "Cost",
+				numeric: true,
+				render: (item: (typeof spenders)[number]) => formatCost(item.usage.cost, 4),
+			},
+		],
+		[],
+	);
 	const columns = useMemo(
 		() => [
 			{
@@ -232,7 +294,7 @@ export function ResourceUsagePanel({
 			title={mode === "tokens" ? "Tokens" : "Models & routes"}
 			subtitle={
 				mode === "tokens"
-					? "Provider usage already indexed for this transcript"
+					? "Recursive: this transcript plus the subagents and advisor it dispatched"
 					: "Observe-only. No canary or promote controls."
 			}
 		>
@@ -246,6 +308,14 @@ export function ResourceUsagePanel({
 				{usage.data && (
 					<>
 						{mode === "tokens" && <UsageStrip usage={usage.data} />}
+						{mode === "tokens" && spenders.length > 1 && (
+							<DataTable
+								columns={spenderColumns}
+								data={spenders}
+								keyExtractor={item => item.key}
+								emptyText="No indexed execution in this transcript"
+							/>
+						)}
 						<DataTable
 							columns={columns}
 							data={usage.data.byModel}

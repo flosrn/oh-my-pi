@@ -934,14 +934,15 @@ export function getObservabilitySession(sessionId: string): ObservabilitySession
 export interface ObservabilityRelatedTranscript {
 	executionId: string;
 	kind: string;
+	sessionFile: string;
 }
 
 export function listObservabilityRelatedTranscripts(leadSessionId: string): ObservabilityRelatedTranscript[] {
 	if (!db) return [];
 	const rows = db
-		.prepare("SELECT id, kind FROM obs_related_transcripts WHERE lead_session_id = ? ORDER BY kind, id")
-		.all(leadSessionId) as Array<{ id: string; kind: string }>;
-	return rows.map(row => ({ executionId: row.id, kind: row.kind }));
+		.prepare("SELECT id, kind, session_file FROM obs_related_transcripts WHERE lead_session_id = ? ORDER BY kind, id")
+		.all(leadSessionId) as Array<{ id: string; kind: string; session_file: string }>;
+	return rows.map(row => ({ executionId: row.id, kind: row.kind, sessionFile: row.session_file }));
 }
 
 export function listObservabilityRuns(): ObservabilityRunRow[] {

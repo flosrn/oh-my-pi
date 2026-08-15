@@ -487,7 +487,9 @@ export interface SessionDetail extends SessionSummary {
 	truncated: boolean;
 	runIds: string[];
 	relatedExecutions: RelatedExecution[];
+	/** Recursive: lead plus related transcripts. Equals `usageRollup.total`. */
 	usage: SessionUsageSummary;
+	usageRollup: SessionUsageRollup;
 }
 
 export interface RunSummary extends ObservabilityFreshness {
@@ -502,7 +504,9 @@ export interface RunSummary extends ObservabilityFreshness {
 
 export interface RunDetail extends RunSummary {
 	truncated: boolean;
+	/** Recursive: every assigned session's lead plus its related transcripts. */
 	usage: SessionUsageSummary;
+	usageRollup: SessionUsageRollup;
 }
 
 export interface TimelineItem {
@@ -560,6 +564,45 @@ export interface SessionUsageSummary {
 	cacheWriteTokens: number;
 	cost: number;
 	byModel: SessionUsageModel[];
+}
+
+/**
+ * One actor transcript inside a Session's recursive total.
+ *
+ * A nested subagent file and `__advisor[.<slug>].jsonl` are related transcripts of
+ * their lead Session (R2), never sibling Sessions - so their spend belongs to that
+ * Session and has to be reachable from it.
+ */
+export interface SessionUsageMember {
+	executionId: string;
+	/** `lead`, `nested` or `advisor`, as classified at ingest by KTD19. */
+	kind: string;
+	/** Transcript stem - a dispatched subagent's name, or null for the lead. */
+	name: string | null;
+	usage: SessionUsageSummary;
+}
+
+/**
+ * A Session's usage, split by the transcript that spent it.
+ *
+ * The domain contract fixes the arithmetic: "Leaf request ownership: the actor
+ * transcript that persisted the assistant observation. Recursive totals sum those
+ * observations once." Each member is summarised from its own distinct file, so no
+ * observation is attributed twice - which also keeps AE7 (fork spend counts once)
+ * intact, since a fork copies entries rather than adding transcripts.
+ *
+ * The recursive total is NOT repeated here: it is the `usage` field beside this one.
+ * `hardRedact` walks with a persistent `WeakSet`, so any object exposed twice in one
+ * payload serialises as `"[Circular]"` - a DTO must not hand out the same reference.
+ *
+ * This is the inferred projection the contract names under session/run rollups, so
+ * it carries `rule` per R8. Bump the version when the arithmetic changes.
+ */
+export interface SessionUsageRollup {
+	rule: "recursive-rollup@1";
+	/** The lead transcript alone - what every number on this page used to mean. */
+	own: SessionUsageSummary;
+	related: SessionUsageMember[];
 }
 
 export interface RoutingDecision {
