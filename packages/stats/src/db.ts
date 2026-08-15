@@ -103,7 +103,17 @@ const PRIORITY_PREMIUM_REQUESTS_BACKFILL_KEY = "premium_requests_priority_v1";
 const AGENT_TYPE_BACKFILL_KEY = "agent_type_v1";
 const FORK_DEDUPE_KEY = "fork_dedupe_v1";
 const TOOL_CALLS_BACKFILL_KEY = "tool_calls_v1";
-const OBSERVABILITY_BACKFILL_KEY = "observability_v1";
+// v2: core JSONL entries now project into `obs_timeline` (R8's first owner). Every
+// already-indexed transcript was parsed by a reader that only looked for
+// `customType: "observability"`, so its offset is advanced past facts that were never
+// written - measured 600 indexed sessions against 0 timeline rows. Only a reset
+// re-reads them from offset 0; without the bump the projection would apply to new
+// lines alone and the fix would look broken on every existing session.
+// v3: `async-result` jobs are `{ jobId, label }`, not `{ id, name }`. v2 stored
+// `String(job)` for the shape it guessed wrong, so every `child_result` row indexed by
+// v2 carries the literal "[object Object]" - found by reading the rendered timeline,
+// not by the test, whose fixture used the guessed shape and passed.
+const OBSERVABILITY_BACKFILL_KEY = "observability_v3";
 function shouldResetBackfill(value: string | undefined): boolean {
 	return value !== BACKFILL_COMPLETE && value !== BACKFILL_PENDING;
 }

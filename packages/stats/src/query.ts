@@ -499,7 +499,25 @@ export async function listEvents(options: TimelineOptions): Promise<Observabilit
 	return timelinePage(options, undefined, 20, 50, "events");
 }
 export async function listLogs(options: TimelineOptions): Promise<ObservabilityPage<TimelineItem> | null> {
-	return timelinePage(options, ["session_boundary", "model_request", "model_attempt", "failure"], 20, 50, "logs");
+	// Lifecycle and control facts, whoever owns them: a declared observability entry,
+	// or the core control entry the transcript already wrote.
+	return timelinePage(
+		options,
+		[
+			"session_boundary",
+			"model_request",
+			"model_attempt",
+			"failure",
+			"session_exit",
+			"model_change",
+			"thinking_level_change",
+			"mode_change",
+			"compaction",
+		],
+		20,
+		50,
+		"logs",
+	);
 }
 
 function requestDto(message: MessageStats): ObservabilityRequest {

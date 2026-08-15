@@ -133,20 +133,95 @@ function RevealList({
 	);
 }
 
+/**
+ * A row that reads `tool_call` and nothing else answers no question, and a timeline of
+ * 79 of them is worse than empty: the reader clicks Show 79 times to learn which tools
+ * ran. So the fact that identifies each projected kind goes on the row itself.
+ *
+ * Safe by construction rather than by review: these payloads are projections, and a
+ * projection carries no body (R27) - every field below is a name, a count or an id.
+ * The full payload stays one click away for the kinds nothing summarises.
+ */
+function timelineSummary(item: TimelineItem): string | null {
+	const payload = item.payload;
+	if (!payload || typeof payload !== "object") return null;
+	const read = (key: string): string | null => {
+		const value = (payload as Record<string, unknown>)[key];
+		return typeof value === "string" ? value : typeof value === "number" ? String(value) : null;
+	};
+	switch (item.kind) {
+		case "tool_call": {
+			const device = read("device");
+			const tool = read("tool");
+			// A device call is recorded as `write`; name the device, not the bus.
+			return device ? `${device} (via ${tool})` : tool;
+		}
+		case "model_change": {
+			const role = read("role");
+			return role ? `${read("model")} · role ${role}` : read("model");
+		}
+		case "thinking_level_change":
+			return read("thinkingLevel");
+		case "mode_change":
+			return read("mode");
+		case "session_exit":
+			return read("exitKind");
+		case "skill_prompt":
+			return read("skill");
+		case "compaction": {
+			const before = read("tokensBefore");
+			return before ? `${before} tokens folded` : null;
+		}
+		case "peer_message": {
+			const peer = read("peer") ?? "unknown peer";
+			const model = read("peerModel");
+			const attributed = (payload as Record<string, unknown>).attributed === true;
+			return `${peer}${model ? ` (${model})` : ""}${attributed ? "" : " · unattributed"}`;
+		}
+		case "child_result": {
+			const jobs = (payload as Record<string, unknown>).jobs;
+			return Array.isArray(jobs) && jobs.length > 0 ? jobs.join(", ") : null;
+		}
+		case "progress": {
+			const phases = (payload as Record<string, unknown>).phases;
+			if (!Array.isArray(phases)) return null;
+			return phases
+				.map(phase => {
+					const record = phase && typeof phase === "object" ? (phase as Record<string, unknown>) : {};
+					const byStatus =
+						record.byStatus && typeof record.byStatus === "object"
+							? (record.byStatus as Record<string, number>)
+							: {};
+					const done = byStatus.completed ?? 0;
+					return `${typeof record.name === "string" ? record.name : "phase"} ${done}/${typeof record.total === "number" ? record.total : "?"}`;
+				})
+				.join(" · ");
+		}
+		default:
+			return null;
+	}
+}
+
 function TimelineList({ items, empty }: { items: TimelineItem[]; empty: string }) {
 	if (items.length === 0) return <EmptyState message={empty} />;
 	return (
 		<ol className="stats-obs-timeline">
-			{items.map(item => (
-				<li key={`${item.entryId}:${item.timestamp}`}>
-					<div className="stats-font-medium">{item.kind}</div>
-					<div className="stats-text-xs stats-text-muted">
-						{item.executionId} · {formatRelativeTime(item.timestamp)}
-						{item.decisionId ? ` · ${item.decisionId}` : ""}
-					</div>
-					<JsonBlock data={item.payload} title={item.entryId} initialCollapsed />
-				</li>
-			))}
+			{items.map(item => {
+				const summary = timelineSummary(item);
+				return (
+					<li key={`${item.entryId}:${item.timestamp}`}>
+						<div className="stats-font-medium">
+							{item.kind}
+							{summary ? <span className="stats-text-muted"> — {summary}</span> : null}
+						</div>
+						<div className="stats-text-xs stats-text-muted">
+							{item.executionId} · {formatRelativeTime(item.timestamp)}
+							{item.decisionId ? ` · ${item.decisionId}` : ""}
+						</div>
+						<JsonBlock data={item.payload} title={item.entryId} initialCollapsed />
+					</li>
+				);
+			})}
 		</ol>
 	);
 }

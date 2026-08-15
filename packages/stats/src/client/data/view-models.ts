@@ -297,6 +297,11 @@ export function observabilityResourceUri(kind: "sessions" | "runs", id: string, 
 	return `stats://${kind}/${encodeURIComponent(id)}`;
 }
 
+/**
+ * `segment` and `verification` are declared facts nothing emits yet. `progress` is the
+ * one this session actually has: the todo list the agent maintained, projected from
+ * `user_todo_edit` as phase names and per-status counts.
+ */
 export function behaviorTimelineItems(items: TimelineItem[]): TimelineItem[] {
 	return items.filter(item => item.kind === "segment" || item.kind === "progress");
 }

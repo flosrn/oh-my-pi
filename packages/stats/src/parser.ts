@@ -166,6 +166,208 @@ function parseObservabilityEntry(entry: SessionCustomEntry): ParsedObservability
 }
 
 /**
+ * WHY A CORE ENTRY BECOMES A TIMELINE FACT.
+ *
+ * R8 gives a timeline fact four possible owners and the FIRST is "a core JSONL
+ * entry". The domain contract is more specific still: tool identity is owned by
+ * `tool_execution_start` + `toolResult`, model and thinking changes by "core control
+ * entries", the child contract by `session_init`. Only the SECOND owner was ever
+ * read - `customType: "observability"`, three lines above - and nothing outside this
+ * branch's own runtime writes that customType. Measured: 600 indexed sessions, 0
+ * rows in `obs_timeline`, while thirteen richer entry types sat unread in the very
+ * files the parser had already opened. Timeline, Behavior and Logs rendered empty
+ * against a transcript that recorded every tool, phase, model move and peer message.
+ *
+ * These projections are deterministic and carry `rule` + `source`, which is what R8
+ * asks of an inferred projection. They never mint or infer Run membership:
+ * `run_assignment` remains the only path to a Run (ADR 0024, R5), so nothing here
+ * ever writes `runId`, and a session with no assignment stays unassigned.
+ *
+ * SOFT CONTENT STAYS OUT, by construction rather than by review. R27 omits prompts,
+ * responses, code, private path segments and ordinary tool payloads from default
+ * DTOs. So a projection carries identity and shape - tool name, resolved device,
+ * phase names with per-status counts, a peer's name and model, the tokens a
+ * compaction folded - and never a body: not `args`, not `intent`, not a peer
+ * message's prose, not a todo item's text, not a compaction summary. Those live in
+ * the transcript, which is where the reveal path reads them from.
+ */
+const CORE_PROJECTION_RULE = "core-projection@1";
+
+/**
+ * ONE cast, named and confined. A transcript entry is parsed JSON, so it is an
+ * untyped record no matter how it is read; asserting the record shape once here and
+ * runtime-checking every individual field below beats repeating an inline
+ * `as { field?: unknown }` at each of a dozen optional reads - which would fabricate
+ * a dozen unverified shapes instead of one honest boundary.
+ */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+	return value as Record<string, unknown>;
+}
+
+function readString(source: unknown, key: string): string | undefined {
+	const value = asRecord(source)?.[key];
+	return typeof value === "string" ? value : undefined;
+}
+
+function readNumber(source: unknown, key: string): number | undefined {
+	const value = asRecord(source)?.[key];
+	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readArray(source: unknown, key: string): unknown[] | undefined {
+	const value = asRecord(source)?.[key];
+	return Array.isArray(value) ? value : undefined;
+}
+
+/**
+ * Every `xd://` device call is recorded under the `write` tool, so a tool list built
+ * from tool names alone reports devices as writes. Measured on one session: 6 of 6
+ * "write" calls were `xd://browser` and `xd://memory_add`, and none was a file write.
+ * The real name is in the call's own `args.path`, so the projection resolves it here
+ * rather than leaving every consumer to re-derive it.
+ */
+function resolveDevice(args: unknown): string | null {
+	const target = readString(args, "path");
+	const match = target?.match(/^xd:\/\/([a-z0-9_]+)/i);
+	return match ? match[1] : null;
+}
+
+/**
+ * Phase names and per-status counts, never a task's text. That is the whole progress
+ * signal - which phases exist and how much of each is done - with no prose in it.
+ */
+function summarizePhases(data: unknown): Array<Record<string, unknown>> | undefined {
+	const phases = readArray(data, "phases");
+	if (!phases) return undefined;
+	return phases.map(phase => {
+		const tasks = readArray(phase, "tasks") ?? [];
+		const byStatus: Record<string, number> = {};
+		for (const task of tasks) {
+			const status = readString(task, "status") ?? "unknown";
+			byStatus[status] = (byStatus[status] ?? 0) + 1;
+		}
+		return { name: readString(phase, "name") ?? null, total: tasks.length, byStatus };
+	});
+}
+
+function projectCustom(entry: SessionCustomEntry): Record<string, unknown> | undefined {
+	switch (entry.customType) {
+		case "tool_execution_start": {
+			const tool = readString(entry.data, "toolName");
+			if (!tool) return undefined;
+			return {
+				kind: "tool_call",
+				source: "core:tool_execution_start",
+				tool,
+				device: resolveDevice(asRecord(entry.data)?.args),
+				toolCallId: readString(entry.data, "toolCallId") ?? null,
+			};
+		}
+		case "user_todo_edit": {
+			const phases = summarizePhases(entry.data);
+			if (!phases) return undefined;
+			return { kind: "progress", source: "core:user_todo_edit", phases };
+		}
+		case "session_exit":
+			return { kind: "session_exit", source: "core:session_exit", exitKind: readString(entry.data, "kind") ?? null };
+		default:
+			return undefined;
+	}
+}
+
+function projectCustomMessage(entry: SessionEntry): Record<string, unknown> | undefined {
+	const customType = readString(entry, "customType");
+	const details = asRecord(entry)?.details;
+	switch (customType) {
+		case "peer-message":
+			// The one place a session records that another session spoke to it. Name,
+			// model and whether Orca attributed the sender - never the message body.
+			return {
+				kind: "peer_message",
+				source: "core:custom_message/peer-message",
+				peer: readString(details, "peer") ?? null,
+				peerModel: readString(details, "model") || null,
+				attributed: asRecord(details)?.attributed === true,
+				messageId: readString(details, "messageId") ?? null,
+			};
+		case "async-result": {
+			// Shape measured on real transcripts: `{ jobId, type, label, durationMs }`.
+			// An unreadable entry is dropped rather than stringified - `String(job)` on an
+			// object yields "[object Object]", which is a wrong value dressed as a real one.
+			const jobs = readArray(details, "jobs");
+			return {
+				kind: "child_result",
+				source: "core:custom_message/async-result",
+				jobs: (jobs ?? [])
+					.map(job => readString(job, "jobId") ?? readString(job, "label"))
+					.filter(name => name !== undefined),
+			};
+		}
+		case "advisor":
+			return { kind: "advisor_message", source: "core:custom_message/advisor" };
+		case "skill-prompt": {
+			// The harness writes this sentence itself, so the name is structural rather
+			// than parsed prose: `the "<name>" skill`.
+			const content = readString(entry, "content") ?? "";
+			const match = content.match(/the "([a-z0-9-]+)" skill/i);
+			return { kind: "skill_prompt", source: "core:custom_message/skill-prompt", skill: match ? match[1] : null };
+		}
+		default:
+			return undefined;
+	}
+}
+
+function projectCorePayload(entry: SessionEntry): Record<string, unknown> | undefined {
+	switch (entry.type) {
+		case "model_change":
+			// `role` names who moved the model, which is the only record of a route change.
+			return {
+				kind: "model_change",
+				source: "core:model_change",
+				model: readString(entry, "model") ?? null,
+				role: readString(entry, "role") ?? null,
+			};
+		case "thinking_level_change":
+			return {
+				kind: "thinking_level_change",
+				source: "core:thinking_level_change",
+				thinkingLevel: readString(entry, "thinkingLevel") ?? null,
+				configured: readString(entry, "configured") ?? null,
+			};
+		case "mode_change":
+			return { kind: "mode_change", source: "core:mode_change", mode: readString(entry, "mode") ?? null };
+		case "compaction":
+			return {
+				kind: "compaction",
+				source: "core:compaction",
+				tokensBefore: readNumber(entry, "tokensBefore") ?? null,
+				firstKeptEntryId: readString(entry, "firstKeptEntryId") ?? null,
+			};
+		case "custom_message":
+			return projectCustomMessage(entry);
+		default:
+			return undefined;
+	}
+}
+
+function projectCoreEntry(
+	entry: SessionEntry,
+	payload: Record<string, unknown> | undefined,
+): ParsedObservabilityEntry | undefined {
+	if (!payload) return undefined;
+	const entryId = readString(entry, "id");
+	const timestamp = readString(entry, "timestamp");
+	if (!entryId || !timestamp) return undefined;
+	return {
+		entryId,
+		parentId: readString(entry, "parentId") ?? null,
+		timestamp,
+		payload: { ...payload, rule: CORE_PROJECTION_RULE },
+	};
+}
+
+/**
  * Extract plain text from a user message content payload.
  */
 function extractUserText(content: unknown): string {
@@ -494,6 +696,16 @@ export async function parseSessionFile(sessionPath: string, fromOffset = 0): Pro
 			if (parsedExit) sessionExit = parsedExit;
 			const parsedObservability = parseObservabilityEntry(entry);
 			if (parsedObservability) observability.push(parsedObservability);
+			// A declared observability fact wins; otherwise the core entry owns itself.
+			else {
+				const projected = projectCoreEntry(entry, projectCustom(entry));
+				if (projected) observability.push(projected);
+			}
+			continue;
+		}
+		const projectedCore = projectCoreEntry(entry, projectCorePayload(entry));
+		if (projectedCore) {
+			observability.push(projectedCore);
 			continue;
 		}
 		if (isServiceTierChange(entry)) {
