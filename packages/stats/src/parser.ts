@@ -766,6 +766,19 @@ export async function parseSessionFile(sessionPath: string, fromOffset = 0): Pro
 
 /**
  * List all session directories (folders).
+ *
+ * `getSessionsDir()` is the ingest boundary, and it is also the identity basis: the path
+ * relative to it decides `main` vs `subagent` (line 49), the project folder (aggregator's
+ * `statsFolder`), and which lead a nested transcript belongs to (aggregator's related-file
+ * resolution). So a transcript written outside this root is not merely unscanned - handed
+ * in directly it would resolve to `../../../tmp/...`, produce a garbage folder and fail its
+ * lead join. Invisible by construction rather than by bug.
+ *
+ * The measured consequence, found twice on 2026-08-16 from opposite ends - a probe that
+ * measured nothing and an index that showed nothing: `omp -p` runs write their transcripts
+ * wherever they are pointed, `--session-dir` included, so their traffic never reaches this
+ * index. Anyone measuring a model or role change has to make the probe write under the
+ * sessions dir, or it records no evidence at all.
  */
 export async function listSessionFolders(): Promise<string[]> {
 	try {
