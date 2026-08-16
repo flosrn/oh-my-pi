@@ -182,7 +182,8 @@ describe("observability targeted ingest", () => {
 			`${JSON.stringify(custom("boundary-1", "session_boundary", { reason: "resume" }, "2026-08-13T10:03:00.000Z"))}\n`,
 		);
 		await ingestSessionDetail("session-resume");
-		expect((database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string }).status).toBe("active");
+		// Non-terminal, not live: the boundary proves the exit was superseded, nothing more.
+		expect((database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string }).status).toBe("unknown");
 	});
 
 	it("does not advance file offsets while the observability backfill is pending", async () => {

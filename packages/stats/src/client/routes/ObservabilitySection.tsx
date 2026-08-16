@@ -45,7 +45,9 @@ function isHardRedacted(value: unknown): boolean {
 }
 
 function statusVariant(status: string): "success" | "danger" | "warning" | "info" | "default" {
-	if (status === "active") return "info";
+	// No branch for `active`: nothing produces it. A transcript witnesses that a session
+	// started, exited, or resumed - never that a process is running - so `unknown` is a
+	// real state here and renders as one instead of borrowing a colour that reads as live.
 	if (status === "completed") return "success";
 	if (status === "interrupted") return "danger";
 	return "default";

@@ -340,7 +340,15 @@ function runSummary(row: ObservabilityRunRow): RunSummary {
 		startedAt: row.startedAt,
 		sessionIds: row.sessionIds,
 		executionIds: sessions.map(item => item.id),
-		status: sessions.length > 0 && sessions.every(item => item.status !== "active") ? "completed" : "active",
+		// Terminal is claimed, never inferred from the absence of a claim. Testing for
+		// `!== "active"` was equivalent while `active` was the only non-terminal state; with
+		// `unknown` in play it would have reported a run of entirely unknown sessions as
+		// completed, turning 124 sessions that overclaimed liveness into 124 that overclaim
+		// finish - the same defect pointed the other way.
+		status:
+			sessions.length > 0 && sessions.every(item => item.status === "completed" || item.status === "interrupted")
+				? "completed"
+				: "unknown",
 		outcome: outcome(timeline),
 		softAvailable: [
 			...new Set(timeline.flatMap(item => redactSoft(parsePayload(item.payloadJson)).available)),

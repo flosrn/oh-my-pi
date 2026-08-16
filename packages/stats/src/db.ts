@@ -103,6 +103,13 @@ const PRIORITY_PREMIUM_REQUESTS_BACKFILL_KEY = "premium_requests_priority_v1";
 const AGENT_TYPE_BACKFILL_KEY = "agent_type_v1";
 const FORK_DEDUPE_KEY = "fork_dedupe_v1";
 const TOOL_CALLS_BACKFILL_KEY = "tool_calls_v1";
+// A session's status is claimed from evidence in its transcript, and liveness is not
+// evidence a file-reading index can have. `active` was the fallback when no terminal
+// event was found, so it accumulated: measured 130 sessions `active`, 124 of them last
+// touched over 24 h ago. The derivation now says `unknown` there, and this key rewrites
+// the rows already stored - the mapping is total, because a row is `active` today for
+// exactly the reason the new derivation calls unknown.
+const STATUS_UNKNOWN_MIGRATION_KEY = "status_unknown_v1";
 // v2: core JSONL entries now project into `obs_timeline` (R8's first owner). Every
 // already-indexed transcript was parsed by a reader that only looked for
 // `customType: "observability"`, so its offset is advanced past facts that were never
@@ -316,6 +323,19 @@ export async function initDb(): Promise<Database> {
 		if (!fileOffsetColumns.some(column => column.name === name)) {
 			db.run(`ALTER TABLE file_offsets ADD COLUMN ${name} ${definition}`);
 		}
+	}
+	// One-time, and idempotent through its own key rather than by being harmless to repeat:
+	// once a live signal exists, `active` becomes a state worth keeping, and a blanket
+	// rewrite on every open would erase it.
+	const statusMigrationRow = db.prepare("SELECT value FROM meta WHERE key = ?").get(STATUS_UNKNOWN_MIGRATION_KEY) as
+		| { value: string }
+		| undefined;
+	if (!statusMigrationRow) {
+		db.run("UPDATE obs_sessions SET status = 'unknown' WHERE status = 'active'");
+		db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+			STATUS_UNKNOWN_MIGRATION_KEY,
+			BACKFILL_COMPLETE,
+		);
 	}
 	const observabilityBackfillRow = db
 		.prepare("SELECT value FROM meta WHERE key = ?")
@@ -667,7 +687,10 @@ export function applyObservabilityProjection(input: ObservabilityProjectionInput
 			const timestamp = finiteTimestamp(event.timestamp);
 			if (timestamp >= lifecycleTimestamp) {
 				lifecycleTimestamp = timestamp;
-				status = "active";
+				// A boundary newer than the last exit supersedes that terminal state - the
+				// session resumed. It does not witness a running process, which no reader of
+				// a file on disk can witness, so the honest state is unknown rather than active.
+				status = "unknown";
 				endedAt = null;
 			}
 		}
@@ -697,7 +720,7 @@ export function applyObservabilityProjection(input: ObservabilityProjectionInput
 			input.folder,
 			input.header.cwd,
 			input.header.title ?? null,
-			status ?? existing?.status ?? "active",
+			status ?? existing?.status ?? "unknown",
 			finiteTimestamp(input.header.timestamp),
 			status === undefined ? (existing?.ended_at ?? null) : endedAt,
 			now,
