@@ -7,6 +7,7 @@ import {
 	CostsRoute,
 	ErrorsRoute,
 	GainRoute,
+	ModelsAdminRoute,
 	ModelsRoute,
 	OverviewRoute,
 	ProjectsRoute,
@@ -117,6 +118,8 @@ export default function App() {
 				return <ProjectsRoute active={isActive} range={range} refreshTrigger={refreshTrigger} />;
 			case "gain":
 				return <GainRoute active={isActive} range={range} refreshTrigger={refreshTrigger} />;
+			case "models-admin":
+				return <ModelsAdminRoute active={isActive} refreshTrigger={refreshTrigger} />;
 		}
 	};
 

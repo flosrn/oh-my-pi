@@ -40,4 +40,10 @@ describe("stats hash routing", () => {
 			}),
 		).toBe("#/sessions/abc?range=7d&tab=behavior");
 	});
+
+	it("canonicalizes the models-admin setup page", () => {
+		expect(parseStatsHash("#/models-admin").section).toBe("models-admin");
+		expect(canonicalizeStatsHash("#/models-admin")).toBe("#/models-admin?range=24h");
+		expect(canonicalizeStatsHash("#/setup")).toBe("#/overview?range=24h");
+	});
 });
