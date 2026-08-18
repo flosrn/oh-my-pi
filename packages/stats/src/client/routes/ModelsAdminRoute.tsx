@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
 	applyModelsAdmin,
 	getModelsAdmin,
@@ -9,7 +9,7 @@ import {
 	type ModelsAdminSnapshot,
 } from "../api";
 import { useResource } from "../data/useResource";
-import { AsyncBoundary, DataTable, Panel, SegmentedControl, StatusPill } from "../ui";
+import { AsyncBoundary, Panel, SegmentedControl, StatusPill } from "../ui";
 
 export interface ModelsAdminRouteProps {
 	active: boolean;
@@ -17,6 +17,12 @@ export interface ModelsAdminRouteProps {
 }
 
 type Scope = "mac" | "vps" | "both";
+
+function filterCatalog(query: string, catalog: string[]): string[] {
+	const needle = query.trim().toLowerCase();
+	if (!needle) return catalog;
+	return catalog.filter(item => item.toLowerCase().includes(needle));
+}
 
 function ModelPicker({
 	value,
@@ -27,19 +33,90 @@ function ModelPicker({
 	catalog: string[];
 	onChange: (next: string) => void;
 }) {
+	const [open, setOpen] = useState(false);
+	const [highlight, setHighlight] = useState(0);
+	const rootRef = useRef<HTMLDivElement>(null);
+	const listId = useId();
+	const matches = useMemo(() => filterCatalog(value, catalog).slice(0, 40), [catalog, value]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onDoc = (event: MouseEvent) => {
+			if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+		};
+		document.addEventListener("mousedown", onDoc);
+		return () => document.removeEventListener("mousedown", onDoc);
+	}, [open]);
+
+	const pick = (next: string) => {
+		onChange(next);
+		setOpen(false);
+	};
+
 	return (
-		<input
-			className="font-mono w-full min-w-0 rounded px-2 py-1 stats-text-primary"
-			style={{
-				background: "var(--stats-surface, transparent)",
-				border: "1px solid var(--stats-border, currentColor)",
-			}}
-			list="models-admin-catalog-list"
-			value={value}
-			spellCheck={false}
-			placeholder="provider/model:effort"
-			onChange={event => onChange(event.target.value)}
-		/>
+		<div className="stats-combobox" ref={rootRef}>
+			<input
+				className="stats-combobox-input"
+				value={value}
+				spellCheck={false}
+				autoComplete="off"
+				role="combobox"
+				aria-expanded={open}
+				aria-controls={listId}
+				aria-autocomplete="list"
+				placeholder="provider/model:effort"
+				title={value}
+				onFocus={() => {
+					setOpen(true);
+					setHighlight(0);
+				}}
+				onChange={event => {
+					onChange(event.target.value);
+					setOpen(true);
+					setHighlight(0);
+				}}
+				onKeyDown={event => {
+					if (event.key === "Escape") {
+						setOpen(false);
+						return;
+					}
+					if (event.key === "ArrowDown") {
+						event.preventDefault();
+						setOpen(true);
+						setHighlight(index => Math.min(index + 1, Math.max(matches.length - 1, 0)));
+						return;
+					}
+					if (event.key === "ArrowUp") {
+						event.preventDefault();
+						setHighlight(index => Math.max(index - 1, 0));
+						return;
+					}
+					if (event.key === "Enter" && open && matches[highlight]) {
+						event.preventDefault();
+						pick(matches[highlight]);
+					}
+				}}
+			/>
+			{open && matches.length > 0 && (
+				<ul className="stats-combobox-list" id={listId} role="listbox">
+					{matches.map((item, index) => (
+						<li
+							key={item}
+							role="option"
+							aria-selected={index === highlight}
+							className={index === highlight ? "is-active" : undefined}
+							onMouseDown={event => {
+								event.preventDefault();
+								pick(item);
+							}}
+							onMouseEnter={() => setHighlight(index)}
+						>
+							{item}
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
 	);
 }
 
@@ -120,12 +197,7 @@ export function ModelsAdminRoute({ active, refreshTrigger }: ModelsAdminRoutePro
 	};
 
 	return (
-		<div className="stats-route-container">
-			<datalist id="models-admin-catalog-list">
-				{catalog.map(model => (
-					<option key={model} value={model} />
-				))}
-			</datalist>
+		<div className="stats-route-container space-y-6">
 			<Panel
 				title="Models admin"
 				subtitle="Change OMP assignments from the dashboard. The Models page stays read-only telemetry."
@@ -374,42 +446,30 @@ function AssignmentTable({
 	catalog: string[];
 	onChange: (id: string, value: string) => void;
 }) {
+	if (rows.length === 0) return <div className="stats-table-empty">Nothing to show</div>;
 	return (
-		<DataTable
-			columns={[
-				{ key: "label", header: "Name", render: item => <span className="font-mono">{item.label}</span> },
-				{
-					key: "value",
-					header: "Model",
-					render: item =>
-						item.locked ? (
+		<div className="stats-assign-table">
+			<div className="stats-assign-head">
+				<div>Name</div>
+				<div>Model</div>
+				<div>Source</div>
+			</div>
+			{rows.map(item => (
+				<div key={item.id} className="stats-assign-row">
+					<div className="stats-assign-name">{item.label}</div>
+					<div className="stats-assign-model">
+						{item.locked ? (
 							<StatusPill variant="info">[] locked</StatusPill>
 						) : (
 							<ModelPicker value={item.value} catalog={catalog} onChange={value => onChange(item.id, value)} />
-						),
-				},
-				{
-					key: "meta",
-					header: "Source",
-					render: item => <span className="font-mono text-xs">{item.meta}</span>,
-				},
-			]}
-			data={rows}
-			keyExtractor={item => item.id}
-			renderMobileCard={item => (
-				<div className="stats-mobile-card">
-					<div className="stats-mobile-card-header mb-2">
-						<div className="stats-font-semibold">{item.label}</div>
+						)}
 					</div>
-					{item.locked ? (
-						<StatusPill variant="info">[] locked</StatusPill>
-					) : (
-						<ModelPicker value={item.value} catalog={catalog} onChange={value => onChange(item.id, value)} />
-					)}
+					<div className="stats-assign-source" title={item.meta}>
+						{item.meta}
+					</div>
 				</div>
-			)}
-			emptyText="Nothing to show"
-		/>
+			))}
+		</div>
 	);
 }
 
