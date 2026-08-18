@@ -956,7 +956,12 @@ function addSessionStatsIdentity(line: string, identities: Record<StatsEntryTabl
 			}
 			return;
 		}
-		if (record.type !== "message" || !("message" in record) || !record.message || typeof record.message !== "object") {
+		if (
+			record.type !== "message" ||
+			!("message" in record) ||
+			!record.message ||
+			typeof record.message !== "object"
+		) {
 			return;
 		}
 		const message = record.message;

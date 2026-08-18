@@ -64,7 +64,12 @@ function boundContent(content: string): { content: string; notes?: string[] } {
 	return notes.length > 0 ? { content: next, notes } : { content: next };
 }
 
-function resource(url: string, content: string, contentType: InternalResource["contentType"], isDirectory = false): InternalResource {
+function resource(
+	url: string,
+	content: string,
+	contentType: InternalResource["contentType"],
+	isDirectory = false,
+): InternalResource {
 	const bounded = boundContent(content);
 	return {
 		url,
@@ -161,18 +166,33 @@ export class StatsProtocolHandler implements ProtocolHandler {
 				const page = await listTimeline({ runId: parts[1] });
 				if (!page) throw new Error(`Unknown run: ${parts[1]}`);
 				if (parsed.json) return asJson(href, page);
-				return resource(href, markdown(`Run ${parts[1]} timeline`, page.items.map(item => `- ${item.kind}`)), "text/markdown");
+				return resource(
+					href,
+					markdown(
+						`Run ${parts[1]} timeline`,
+						page.items.map(item => `- ${item.kind}`),
+					),
+					"text/markdown",
+				);
 			}
 			if (parts.length > 2) throw new Error(`Unknown stats resource: stats://${parts.join("/")}`);
 			if (parsed.json) return asJson(href, run);
-			return resource(href, markdown(`Run ${run.runId}`, [`- sessions: ${run.sessionIds.join(", ") || "none"}`]), "text/markdown");
+			return resource(
+				href,
+				markdown(`Run ${run.runId}`, [`- sessions: ${run.sessionIds.join(", ") || "none"}`]),
+				"text/markdown",
+			);
 		}
 
 		if (parts[0] === "requests" && parts[1] && parts.length === 2) {
 			const request = await getRequest(parts[1]);
 			if (!request) throw new Error(`Unknown request: ${parts[1]}`);
 			if (parsed.json) return asJson(href, request);
-			return resource(href, markdown(`Request ${request.requestId}`, [`- ${request.model} ${request.provider}`]), "text/markdown");
+			return resource(
+				href,
+				markdown(`Request ${request.requestId}`, [`- ${request.model} ${request.provider}`]),
+				"text/markdown",
+			);
 		}
 
 		if (parts[0] === "decisions" && parts[1] && parts.length === 2) {
@@ -189,7 +209,10 @@ export class StatsProtocolHandler implements ProtocolHandler {
 		const params = new URLSearchParams(query.includes("?") ? query.slice(query.indexOf("?") + 1) : "");
 		if (query.includes("project=*")) params.set("project", "*");
 		const project = projectFromSearch(params, context);
-		const [sessions, runs] = await Promise.all([listSessions({ project, limit: MAX_COMPLETIONS }), listRuns({ project, limit: MAX_COMPLETIONS })]);
+		const [sessions, runs] = await Promise.all([
+			listSessions({ project, limit: MAX_COMPLETIONS }),
+			listRuns({ project, limit: MAX_COMPLETIONS }),
+		]);
 		const values = [
 			"sessions",
 			"runs",

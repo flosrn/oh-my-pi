@@ -138,9 +138,7 @@ describe("session observability events", () => {
 
 		expect(await session.switchSession(targetFile)).toBe(true);
 		const boundaries = observabilityEntries(source).filter(entry => entry.data?.kind === "session_boundary");
-		expect(boundaries.map(entry => entry.data)).toEqual([
-			{ v: 1, kind: "session_boundary", reason: "resume" },
-		]);
+		expect(boundaries.map(entry => entry.data)).toEqual([{ v: 1, kind: "session_boundary", reason: "resume" }]);
 	});
 
 	it("preserves an actor transcript header id across park and revive", async () => {

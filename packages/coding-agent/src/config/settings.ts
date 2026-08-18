@@ -43,11 +43,7 @@ import { AUTO_IMAGE_PROVIDER_ORDER, isImageProviderId } from "../tools/image-pro
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { INSPECT_IMAGE_MODES } from "../utils/inspect-image-mode";
 import { isSearchProviderId, SEARCH_PROVIDER_ORDER } from "../web/search/types";
-import {
-	appendExternalRouteChange,
-	normalizeRouteSnapshot,
-	type RouteSnapshot,
-} from "./routing-audit";
+import { appendExternalRouteChange, normalizeRouteSnapshot, type RouteSnapshot } from "./routing-audit";
 import {
 	type BashInterceptorRule,
 	type GroupPrefix,
