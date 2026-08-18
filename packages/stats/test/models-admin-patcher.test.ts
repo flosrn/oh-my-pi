@@ -39,9 +39,7 @@ describe("comment-preserving YAML patcher", () => {
 	});
 
 	it("forces retry.fallbackChains.advisor to stay []", () => {
-		const attempted = setYamlPath(SAMPLE, ["retry", "fallbackChains", "advisor"], [
-			"forbidden/should-not-land:low",
-		]);
+		const attempted = setYamlPath(SAMPLE, ["retry", "fallbackChains", "advisor"], ["forbidden/should-not-land:low"]);
 		expect(attempted).toContain("    advisor: []  # MUST stay empty");
 		expect(attempted).not.toContain("forbidden/should-not-land:low");
 		expect(ensureAdvisorFallbackEmpty("retry:\n  fallbackChains:\n    advisor:\n      - sneak\n")).toContain(
@@ -50,9 +48,7 @@ describe("comment-preserving YAML patcher", () => {
 	});
 
 	it("replaces a block list without rewriting sibling comments", () => {
-		const next = setYamlPath(SAMPLE, ["retry", "fallbackChains", "default"], [
-			"google/gemini-2.5-pro:high",
-		]);
+		const next = setYamlPath(SAMPLE, ["retry", "fallbackChains", "default"], ["google/gemini-2.5-pro:high"]);
 		expect(next).toContain("    advisor: []  # MUST stay empty");
 		expect(next).toContain("    default:");
 		expect(next).toContain("      - google/gemini-2.5-pro:high");
@@ -61,9 +57,9 @@ describe("comment-preserving YAML patcher", () => {
 
 	it("inserts a missing agent override under the existing map", () => {
 		const next = setYamlPath(SAMPLE, ["task", "agentModelOverrides", "lfg-research"], "@smol");
-		expect(next).toContain("    scout: \"@smol\"");
+		expect(next).toContain('    scout: "@smol"');
 		expect(next).toContain("    oracle: anthropic/claude-opus-4:high");
-		expect(next).toContain("    lfg-research: \"@smol\"");
+		expect(next).toContain('    lfg-research: "@smol"');
 		expect(next.indexOf("scout:")).toBeLessThan(next.indexOf("lfg-research:"));
 	});
 
@@ -77,7 +73,7 @@ model: "@smol"
 hello
 `;
 		const asString = setFrontmatterModel(md, "anthropic/claude-sonnet-4:low");
-		expect(asString).toContain('model: anthropic/claude-sonnet-4:low');
+		expect(asString).toContain("model: anthropic/claude-sonnet-4:low");
 		expect(asString).toContain("# body stays\nhello\n");
 
 		const asList = setFrontmatterModel(md, ["openai/gpt-4.1:high", "openai/gpt-4.1:low"]);

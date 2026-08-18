@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	pickerOptions,
-	suggestionsForAgent,
-	suggestionsForRole,
-} from "../src/client/routes/model-suggestions";
+import { pickerOptions, suggestionsForAgent, suggestionsForRole } from "../src/client/routes/model-suggestions";
 
 describe("model suggestions", () => {
 	it("keeps the current pin first and does not filter on empty query", () => {

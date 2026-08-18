@@ -27,14 +27,8 @@ function makeTree(): OmpTree {
 	fs.mkdirSync(path.join(agentDir, "scripts"), { recursive: true });
 	fs.mkdirSync(path.join(root, "hosts"), { recursive: true });
 	fs.writeFileSync(path.join(agentDir, "config.yml"), SHARED);
-	fs.writeFileSync(
-		path.join(agentDir, "WATCHDOG.yml"),
-		`advisors:\n  - name: primary\n    model: xai/grok-4:high\n`,
-	);
-	fs.writeFileSync(
-		path.join(agentDir, "agents", "scout.md"),
-		`---\nname: scout\nmodel: "@smol"\n---\nscout body\n`,
-	);
+	fs.writeFileSync(path.join(agentDir, "WATCHDOG.yml"), `advisors:\n  - name: primary\n    model: xai/grok-4:high\n`);
+	fs.writeFileSync(path.join(agentDir, "agents", "scout.md"), `---\nname: scout\nmodel: "@smol"\n---\nscout body\n`);
 	fs.writeFileSync(
 		path.join(agentDir, "hermes-memory-config.json"),
 		`${JSON.stringify({ llmModelOverride: "xai/grok-4:low" }, null, 2)}\n`,
@@ -88,11 +82,7 @@ describe("apply scope", () => {
 		const tree = makeTree();
 		trees.push(tree.root);
 		const before = fs.readFileSync(tree.configYml, "utf8");
-		const preview = buildPreview(
-			[{ kind: "role", id: "default", value: "openai/gpt-4.1:high" }],
-			"vps",
-			tree,
-		);
+		const preview = buildPreview([{ kind: "role", id: "default", value: "openai/gpt-4.1:high" }], "vps", tree);
 		expect(preview.files).toEqual(["hosts/gapicore.yml"]);
 		await applyChanges([{ kind: "role", id: "default", value: "openai/gpt-4.1:high" }], "vps", "test", tree);
 		expect(fs.readFileSync(tree.configYml, "utf8")).toBe(before);
@@ -141,9 +131,9 @@ describe("apply safety", () => {
 				changes: [{ kind: "agentFrontmatter", id: "../../README", value: "x" }],
 			}),
 		).toThrow(/valid agent id/);
-		expect(() =>
-			buildPreview([{ kind: "agentFrontmatter", id: "../../README", value: "x" }], "mac", tree),
-		).toThrow(/Invalid agent id/);
+		expect(() => buildPreview([{ kind: "agentFrontmatter", id: "../../README", value: "x" }], "mac", tree)).toThrow(
+			/Invalid agent id/,
+		);
 		expect(fs.existsSync(path.join(tree.root, "README.md"))).toBe(false);
 	});
 

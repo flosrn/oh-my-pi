@@ -2,11 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
 	applyModelsAdmin,
 	getModelsAdmin,
-	previewModelsAdmin,
 	type ModelsAdminApplyResult,
 	type ModelsAdminChange,
 	type ModelsAdminPreview,
 	type ModelsAdminSnapshot,
+	previewModelsAdmin,
 } from "../api";
 import { useResource } from "../data/useResource";
 import { AsyncBoundary, Panel, SegmentedControl, StatusPill } from "../ui";
@@ -136,9 +136,16 @@ function formatValue(value: string | string[] | null | undefined): string {
 }
 
 function parseValue(raw: string): string | string[] {
-	if (raw.includes("\n")) return raw.split("\n").map(part => part.trim()).filter(Boolean);
+	if (raw.includes("\n"))
+		return raw
+			.split("\n")
+			.map(part => part.trim())
+			.filter(Boolean);
 	if (raw.includes(",") && raw.split(",").length > 1 && !raw.includes("provider")) {
-		const parts = raw.split(",").map(part => part.trim()).filter(Boolean);
+		const parts = raw
+			.split(",")
+			.map(part => part.trim())
+			.filter(Boolean);
 		if (parts.length > 1) return parts;
 	}
 	return raw.trim();
@@ -304,7 +311,12 @@ function ModelsAdminSections(props: {
 						/>
 					</label>
 					<div className="flex flex-wrap gap-2">
-						<button type="button" className="stats-button" disabled={props.busy !== null} onClick={props.onPreview}>
+						<button
+							type="button"
+							className="stats-button"
+							disabled={props.busy !== null}
+							onClick={props.onPreview}
+						>
 							{props.busy === "preview" ? "Previewing…" : "Preview diffs"}
 						</button>
 						<button
@@ -319,7 +331,9 @@ function ModelsAdminSections(props: {
 					{props.formError && <div className="stats-text-danger text-sm">{props.formError}</div>}
 					{props.result && (
 						<div className="flex flex-col gap-2 min-w-0">
-							<StatusPill variant={props.result.applied ? "success" : "warning"}>{props.result.message}</StatusPill>
+							<StatusPill variant={props.result.applied ? "success" : "warning"}>
+								{props.result.message}
+							</StatusPill>
 							{props.result.git && (
 								<pre className="stats-text-primary text-xs whitespace-pre-wrap break-words">
 									git: {props.result.git.ok ? "ok" : "error"} {props.result.git.output}

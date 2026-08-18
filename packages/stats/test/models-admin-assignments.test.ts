@@ -10,10 +10,7 @@ function makeTree(): OmpTree {
 	const agentDir = path.join(root, "agent");
 	fs.mkdirSync(path.join(agentDir, "agents"), { recursive: true });
 	fs.mkdirSync(path.join(root, "hosts"), { recursive: true });
-	fs.writeFileSync(
-		path.join(agentDir, "config.yml"),
-		`modelRoles:\n  default: anthropic/claude-sonnet-4:medium\n`,
-	);
+	fs.writeFileSync(path.join(agentDir, "config.yml"), `modelRoles:\n  default: anthropic/claude-sonnet-4:medium\n`);
 	fs.writeFileSync(
 		path.join(agentDir, "models.yml"),
 		`providers:
@@ -28,10 +25,7 @@ function makeTree(): OmpTree {
 `,
 	);
 	fs.writeFileSync(path.join(agentDir, "WATCHDOG.yml"), `advisors:\n  - name: primary\n    model: "@smol"\n`);
-	fs.writeFileSync(
-		path.join(agentDir, "agents", "scout.md"),
-		`---\nname: scout\nmodel: "@smol"\n---\nbody\n`,
-	);
+	fs.writeFileSync(path.join(agentDir, "agents", "scout.md"), `---\nname: scout\nmodel: "@smol"\n---\nbody\n`);
 	return {
 		root,
 		agentDir,

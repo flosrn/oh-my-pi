@@ -64,8 +64,7 @@ export function setFrontmatterModel(source: string, value: string | string[] | n
 		const fm = setYamlPath("name: untitled\n", ["model"], value);
 		return `---\n${fm.replace(/\n$/, "")}\n---\n${source}`;
 	}
-	const nextFm =
-		value === null ? removeYamlKey(split.fm, ["model"]) : setYamlPath(split.fm, ["model"], value);
+	const nextFm = value === null ? removeYamlKey(split.fm, ["model"]) : setYamlPath(split.fm, ["model"], value);
 	const fmBlock = nextFm.replace(/\n$/, "");
 	const body = split.body;
 	return `---\n${fmBlock}\n---\n${body}`;

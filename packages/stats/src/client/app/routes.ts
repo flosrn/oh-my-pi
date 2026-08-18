@@ -8,10 +8,10 @@ import {
 	Plug,
 	Settings,
 	Smile,
-	TrendingUp,
 	SquareStack,
-	Wrench,
+	TrendingUp,
 	Workflow,
+	Wrench,
 } from "lucide-react";
 import type React from "react";
 

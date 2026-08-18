@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { $ } from "bun";
-import { relativeToRoot, resolveOmpTree, type OmpTree } from "./paths";
+import { type OmpTree, relativeToRoot, resolveOmpTree } from "./paths";
 import type { ApplyResult, ApplyScope, ModelChange, PreviewResult } from "./types";
 import { APPLY_EFFECT } from "./types";
 import { ensureAdvisorFallbackEmpty, formatScalar, setFrontmatterModel, setYamlPath, unifiedDiff } from "./yaml-patch";
@@ -94,16 +94,17 @@ function upsertEdit(edits: Map<string, FileEdit>, tree: OmpTree, abs: string, mu
 
 function applyChange(tree: OmpTree, edits: Map<string, FileEdit>, scope: ApplyScope, change: ModelChange): void {
 	const hostOnly = Boolean(change.hostOnly) || scope === "vps";
-	const sharedConfig = () => upsertEdit(edits, tree, tree.configYml, text => {
-		let next = text || "";
-		if (change.kind === "role") next = setYamlPath(next, ["modelRoles", change.id], change.value ?? "");
-		else if (change.kind === "fallback") {
-			next = setYamlPath(next, ["retry", "fallbackChains", change.id], change.value ?? []);
-		} else if (change.kind === "agentOverride") {
-			next = setYamlPath(next, ["task", "agentModelOverrides", change.id], change.value ?? "");
-		}
-		return ensureAdvisor(next);
-	});
+	const sharedConfig = () =>
+		upsertEdit(edits, tree, tree.configYml, text => {
+			let next = text || "";
+			if (change.kind === "role") next = setYamlPath(next, ["modelRoles", change.id], change.value ?? "");
+			else if (change.kind === "fallback") {
+				next = setYamlPath(next, ["retry", "fallbackChains", change.id], change.value ?? []);
+			} else if (change.kind === "agentOverride") {
+				next = setYamlPath(next, ["task", "agentModelOverrides", change.id], change.value ?? "");
+			}
+			return ensureAdvisor(next);
+		});
 
 	const overlay = (file: string) =>
 		upsertEdit(edits, tree, file, text => {
@@ -147,9 +148,7 @@ function applyChange(tree: OmpTree, edits: Map<string, FileEdit>, scope: ApplySc
 	if (change.kind === "role" || change.kind === "fallback" || change.kind === "agentOverride") {
 		sharedConfig();
 		if (change.kind === "role" && change.id === "advisor" && fs.existsSync(tree.watchdogYml)) {
-			upsertEdit(edits, tree, tree.watchdogYml, text =>
-				setWatchdogModel(text, 0, String(change.value ?? "")),
-			);
+			upsertEdit(edits, tree, tree.watchdogYml, text => setWatchdogModel(text, 0, String(change.value ?? "")));
 		}
 		return;
 	}
@@ -188,7 +187,7 @@ function applyChange(tree: OmpTree, edits: Map<string, FileEdit>, scope: ApplySc
 
 function asNullable(value: ModelChange["value"]): string | null {
 	if (value == null) return null;
-	return Array.isArray(value) ? value[0] ?? null : value;
+	return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 export function buildPreview(changes: ModelChange[], scope: ApplyScope, tree = resolveOmpTree()): PreviewResult {

@@ -61,9 +61,10 @@ export function resolveOmpTree(override = process.env.OMP_HOME ?? process.env.OM
 	const parent = path.dirname(cwd);
 	if (looksLikeOmpTree(parent)) candidates.push({ root: parent, kind: "checkout" });
 
-	const hit =
-		candidates.find(c => looksLikeOmpTree(c.root)) ??
-		({ root: candidates[0]?.root ?? path.join(os.homedir(), ".omp"), kind: "missing" as const });
+	const hit = candidates.find(c => looksLikeOmpTree(c.root)) ?? {
+		root: candidates[0]?.root ?? path.join(os.homedir(), ".omp"),
+		kind: "missing" as const,
+	};
 	const root = hit.root;
 	const present = looksLikeOmpTree(root);
 	const agentDir = path.join(root, "agent");

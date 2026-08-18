@@ -15,9 +15,9 @@ describe("stats hash routing", () => {
 	});
 
 	it("keeps list filters off detail hashes", () => {
-		expect(
-			canonicalizeStatsHash("#/sessions/abc?status=active&project=omp&failure=true&q=needle&range=7d"),
-		).toBe("#/sessions/abc?range=7d&tab=requests");
+		expect(canonicalizeStatsHash("#/sessions/abc?status=active&project=omp&failure=true&q=needle&range=7d")).toBe(
+			"#/sessions/abc?range=7d&tab=requests",
+		);
 	});
 
 	it("writes allowlisted list keys in canonical order", () => {

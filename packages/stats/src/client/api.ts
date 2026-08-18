@@ -1,4 +1,15 @@
 import type {
+	ObservabilityPage,
+	ObservabilityRequest,
+	RunDetail,
+	RunSummary,
+	SessionDetail,
+	SessionSummary,
+	SessionUsageSummary,
+	TimelineItem,
+	ToolUsageStats,
+} from "../shared-types";
+import type {
 	BehaviorDashboardStats,
 	CostDashboardStats,
 	FolderStats,
@@ -11,17 +22,6 @@ import type {
 	TimeRange,
 	ToolDashboardStats,
 } from "./types";
-import type {
-	ObservabilityPage,
-	ObservabilityRequest,
-	RunDetail,
-	RunSummary,
-	SessionDetail,
-	SessionSummary,
-	SessionUsageSummary,
-	TimelineItem,
-	ToolUsageStats,
-} from "../shared-types";
 
 const API_BASE = "/api";
 

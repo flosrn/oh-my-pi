@@ -5,9 +5,11 @@ import { withFileLock } from "@oh-my-pi/pi-utils/file-lock";
 import {
 	applyObservabilityProjection,
 	applyRoutingAuditRecords,
-	getAuditOffset,
 	getRecentErrors as dbGetRecentErrors,
 	getRecentRequests as dbGetRecentRequests,
+	type FileOffset,
+	type FileOffsetIdentity,
+	getAuditOffset,
 	getBehaviorByModel,
 	getBehaviorOverall,
 	getBehaviorTimeSeries,
@@ -35,15 +37,14 @@ import {
 	insertToolCalls,
 	insertUserMessageStats,
 	markSessionBackfillsComplete,
+	type ObservabilitySessionSnapshot,
 	runStatsTransaction,
 	setFileOffset,
 	updateToolResults,
 	updateUserMessageLinks,
-	type FileOffset,
-	type FileOffsetIdentity,
-	type ObservabilitySessionSnapshot,
 } from "./db";
 import { listAllSessionFiles, listSessionFiles, type ParseSessionResult, parseSessionFile } from "./parser";
+import { getRequestBySqliteId } from "./query";
 import type { SyncWorkerRequest, SyncWorkerResponse } from "./sync-worker";
 // Coding-agent binary/bundle workers route through the CLI entrypoint with a
 // hidden argv mode, so the compiled binary and npm bundle only need one
@@ -57,7 +58,6 @@ import type {
 	ToolDashboardStats,
 } from "./types";
 import { computeUsageWindowStats, fetchUsageSnapshots } from "./usage-windows";
-import { getRequestBySqliteId } from "./query";
 
 const STATS_SYNC_LOCK_RETRY_MS = 25;
 const STATS_SYNC_LOCK_WAIT_MS = 60 * 60 * 1000;
@@ -113,7 +113,11 @@ async function planSourceRead(sessionFile: string, stored: FileOffset | null): P
 		(stored.inode !== stat.ino || stored.dev !== stat.dev);
 	let boundaryBroken = false;
 	if (stored && stored.offset > 0 && stored.offset <= stat.size) {
-		const boundary = new Uint8Array(await Bun.file(sessionFile).slice(stored.offset - 1, stored.offset).arrayBuffer());
+		const boundary = new Uint8Array(
+			await Bun.file(sessionFile)
+				.slice(stored.offset - 1, stored.offset)
+				.arrayBuffer(),
+		);
 		boundaryBroken = boundary[0] !== 0x0a;
 	}
 	if (stored && (stat.size < stored.offset || inodeChanged || boundaryBroken)) {
@@ -397,7 +401,11 @@ async function ingestRoutingAudit(persist: boolean): Promise<void> {
 		fromOffset = 0;
 		generation++;
 	} else if (stored && stored.offset > 0) {
-		const boundary = new Uint8Array(await Bun.file(logPath).slice(stored.offset - 1, stored.offset).arrayBuffer());
+		const boundary = new Uint8Array(
+			await Bun.file(logPath)
+				.slice(stored.offset - 1, stored.offset)
+				.arrayBuffer(),
+		);
 		if (boundary[0] !== 0x0a) {
 			fromOffset = 0;
 			generation++;

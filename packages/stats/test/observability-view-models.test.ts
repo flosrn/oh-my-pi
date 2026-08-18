@@ -45,9 +45,8 @@ describe("observability view models", () => {
 
 	it("keeps Behavior empty unless segment or progress facts exist", () => {
 		expect(behaviorTimelineItems([timelineItem("model_request"), timelineItem("failure")])).toEqual([]);
-		expect(behaviorTimelineItems([timelineItem("segment"), timelineItem("progress")]).map(item => item.kind)).toEqual([
-			"segment",
-			"progress",
-		]);
+		expect(behaviorTimelineItems([timelineItem("segment"), timelineItem("progress")]).map(item => item.kind)).toEqual(
+			["segment", "progress"],
+		);
 	});
 });

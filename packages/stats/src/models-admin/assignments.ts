@@ -1,8 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { YAML } from "bun";
-import { relativeToRoot, resolveOmpTree, type OmpTree } from "./paths";
-import type { AgentAssignment, HermesAssignment, ModelsAdminSnapshot, RoleAssignment, WatchdogAssignment } from "./types";
+import { type OmpTree, relativeToRoot, resolveOmpTree } from "./paths";
+import type {
+	AgentAssignment,
+	HermesAssignment,
+	ModelsAdminSnapshot,
+	RoleAssignment,
+	WatchdogAssignment,
+} from "./types";
 import { splitFrontmatter } from "./yaml-patch";
 
 function readText(file: string): string | null {
