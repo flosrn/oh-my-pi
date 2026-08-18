@@ -27,6 +27,7 @@ const VALID_SECTIONS: DashboardSection[] = [
 	"behavior",
 	"projects",
 	"gain",
+	"models-admin",
 ];
 const VALID_RANGES: TimeRange[] = ["1h", "24h", "7d", "30d", "90d", "all"];
 

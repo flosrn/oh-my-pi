@@ -4,10 +4,10 @@ import * as path from "node:path";
 import * as statsAggregator from "@oh-my-pi/omp-stats/aggregator";
 import { getSession } from "@oh-my-pi/omp-stats/query";
 import { getSessionsDir } from "@oh-my-pi/pi-utils";
+import { installStatsTestIsolation } from "../../stats/test/helpers/temp-agent";
+import { parseInternalUrl } from "../src/internal-urls/parse";
 import { InternalUrlRouter } from "../src/internal-urls/router";
 import { StatsProtocolHandler } from "../src/internal-urls/stats-protocol";
-import { parseInternalUrl } from "../src/internal-urls/parse";
-import { installStatsTestIsolation } from "../../stats/test/helpers/temp-agent";
 
 installStatsTestIsolation("@pi-coding-agent-stats-protocol-");
 
@@ -68,13 +68,16 @@ describe("stats:// protocol", () => {
 		]);
 		const handler = new StatsProtocolHandler();
 		const scoped = await handler.resolve(parseInternalUrl("stats://sessions?format=json"), { cwd: "/work/one" });
-		const all = await handler.resolve(parseInternalUrl("stats://sessions?format=json&project=*"), { cwd: "/work/one" });
+		const all = await handler.resolve(parseInternalUrl("stats://sessions?format=json&project=*"), {
+			cwd: "/work/one",
+		});
 
 		expect(JSON.parse(scoped.content).items.map((item: { sessionId: string }) => item.sessionId)).toEqual(["one"]);
-		expect(JSON.parse(all.content).items.map((item: { sessionId: string }) => item.sessionId).sort()).toEqual([
-			"one",
-			"two",
-		]);
+		expect(
+			JSON.parse(all.content)
+				.items.map((item: { sessionId: string }) => item.sessionId)
+				.sort(),
+		).toEqual(["one", "two"]);
 	});
 
 	it("resolves only through query functions without triggering ingestion or sync", async () => {

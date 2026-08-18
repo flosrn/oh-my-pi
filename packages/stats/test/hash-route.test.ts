@@ -15,9 +15,9 @@ describe("stats hash routing", () => {
 	});
 
 	it("keeps list filters off detail hashes", () => {
-		expect(
-			canonicalizeStatsHash("#/sessions/abc?status=active&project=omp&failure=true&q=needle&range=7d"),
-		).toBe("#/sessions/abc?range=7d&tab=requests");
+		expect(canonicalizeStatsHash("#/sessions/abc?status=active&project=omp&failure=true&q=needle&range=7d")).toBe(
+			"#/sessions/abc?range=7d&tab=requests",
+		);
 	});
 
 	it("writes allowlisted list keys in canonical order", () => {
@@ -39,5 +39,11 @@ describe("stats hash routing", () => {
 				q: "needle",
 			}),
 		).toBe("#/sessions/abc?range=7d&tab=behavior");
+	});
+
+	it("canonicalizes the models-admin setup page", () => {
+		expect(parseStatsHash("#/models-admin").section).toBe("models-admin");
+		expect(canonicalizeStatsHash("#/models-admin")).toBe("#/models-admin?range=24h");
+		expect(canonicalizeStatsHash("#/setup")).toBe("#/overview?range=24h");
 	});
 });

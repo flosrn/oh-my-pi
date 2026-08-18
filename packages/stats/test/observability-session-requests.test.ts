@@ -18,7 +18,14 @@ const USAGE = {
 };
 
 function header(id: string) {
-	return { type: "session", version: 3, id, timestamp: "2026-08-13T10:00:00.000Z", cwd: "/tmp/project", title: "Request session" };
+	return {
+		type: "session",
+		version: 3,
+		id,
+		timestamp: "2026-08-13T10:00:00.000Z",
+		cwd: "/tmp/project",
+		title: "Request session",
+	};
 }
 
 async function createSession(id: string, entries: unknown[]): Promise<void> {
@@ -69,7 +76,7 @@ describe("session indexed requests", () => {
 		]);
 		await syncAllSessions({ workers: 1 });
 
-		const detail = await (await api("/api/sessions/session-requests")).json() as {
+		const detail = (await (await api("/api/sessions/session-requests")).json()) as {
 			usage: { requests: number; errors: number; tools: number; totalTokens: number; cost: number };
 		};
 		expect(detail.usage.requests).toBe(2);
@@ -77,7 +84,7 @@ describe("session indexed requests", () => {
 		expect(detail.usage.tools).toBe(1);
 		expect(detail.usage.totalTokens).toBe(60);
 
-		const requests = await (await api("/api/sessions/session-requests/requests")).json() as {
+		const requests = (await (await api("/api/sessions/session-requests/requests")).json()) as {
 			items: Array<Record<string, unknown>>;
 		};
 		expect(requests.items).toHaveLength(2);
@@ -86,17 +93,17 @@ describe("session indexed requests", () => {
 		expect(requests.items.some(item => item.model === "claude-fable-5")).toBe(true);
 		expect(requests.items[0]).toHaveProperty("id");
 
-		const failures = await (await api("/api/sessions/session-requests/requests?errors=true")).json() as {
+		const failures = (await (await api("/api/sessions/session-requests/requests?errors=true")).json()) as {
 			items: Array<{ entryId: string }>;
 		};
 		expect(failures.items.map(item => item.entryId)).toEqual(["fail-1"]);
 
-		const tools = await (await api("/api/sessions/session-requests/tools")).json() as {
+		const tools = (await (await api("/api/sessions/session-requests/tools")).json()) as {
 			items: Array<{ tool: string; calls: number }>;
 		};
 		expect(tools.items[0]).toMatchObject({ tool: "bash", calls: 1 });
 
-		const usage = await (await api("/api/sessions/session-requests/usage")).json() as {
+		const usage = (await (await api("/api/sessions/session-requests/usage")).json()) as {
 			requests: number;
 			byModel: Array<{ model: string; requests: number }>;
 		};

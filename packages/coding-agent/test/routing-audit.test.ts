@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
 	appendRoutingDecision,
-	readRoutingAuditLog,
 	type RoutingDecisionInput,
+	readRoutingAuditLog,
 } from "@oh-my-pi/pi-coding-agent/config/routing-audit";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 

@@ -21,6 +21,7 @@ import {
 import { decodeEmbeddedClientArchive } from "./embedded-client";
 import embeddedClientArchiveTxt from "./embedded-client.generated.txt";
 import { getGainDashboardStats } from "./gain-aggregator";
+import { allowDashboardMutation, applyChanges, buildPreview, loadSnapshot, parseApplyBody } from "./models-admin";
 import {
 	prepareStatsPort,
 	recoverStatsPort,
@@ -476,6 +477,34 @@ async function handleApiRequest(req: Request): Promise<Response> {
 		const project = url.searchParams.get("project");
 		const stats = await getGainDashboardStats(range, project);
 		return Response.json(stats);
+	}
+
+	if (path === "/api/models-admin") {
+		if (req.method !== "GET") return methodNotAllowed("GET");
+		return jsonResponse(loadSnapshot(), { headers: { "Cache-Control": "no-store" } });
+	}
+
+	if (path === "/api/models-admin/preview" || path === "/api/models-admin/apply") {
+		if (req.method !== "POST") return methodNotAllowed("POST");
+		if (!allowDashboardMutation(req)) {
+			return jsonResponse({ error: "Cross-origin dashboard mutation rejected" }, { status: 403 });
+		}
+		let body: unknown;
+		try {
+			body = await req.json();
+		} catch {
+			return jsonResponse({ error: "Invalid JSON body" }, { status: 400 });
+		}
+		try {
+			const parsed = parseApplyBody(body);
+			if (path === "/api/models-admin/preview") {
+				return jsonResponse(buildPreview(parsed.changes, parsed.scope));
+			}
+			return jsonResponse(await applyChanges(parsed.changes, parsed.scope, parsed.commitMessage));
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return jsonResponse({ error: message }, { status: 400 });
+		}
 	}
 
 	return new Response("Not Found", { status: 404 });

@@ -17,7 +17,6 @@ export {
 } from "./aggregator";
 export { closeDb } from "./db";
 export { getGainDashboardStats } from "./gain-aggregator";
-export { startServer } from "./server";
 export {
 	getDecision,
 	getRequest,
@@ -33,13 +32,12 @@ export {
 	reveal,
 	toJsonSafe,
 } from "./query";
+export { startServer } from "./server";
 export type {
 	GainDashboardStats,
 	GainSource,
 	GainSourceTotals,
 	GainTimeSeriesPoint,
-} from "./shared-types";
-export type {
 	HardRedaction,
 	ObservabilityFreshness,
 	ObservabilityOutcome,

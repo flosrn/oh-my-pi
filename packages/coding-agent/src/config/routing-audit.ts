@@ -14,7 +14,13 @@ const SENSITIVE_VALUE_PATTERNS = [
 	/\b(?:sk|rk|pk|ghp|github_pat|xox[baprs]|AIza)[-_A-Za-z0-9]{12,}\b/g,
 ] as const;
 
-export type RoutingAuditJson = null | boolean | number | string | RoutingAuditJson[] | { [key: string]: RoutingAuditJson };
+export type RoutingAuditJson =
+	| null
+	| boolean
+	| number
+	| string
+	| RoutingAuditJson[]
+	| { [key: string]: RoutingAuditJson };
 export type RoutingAuditObject = { [key: string]: RoutingAuditJson };
 
 /** Credential-free, normalized routing state recorded before and after an audit event. */

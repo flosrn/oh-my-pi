@@ -1,11 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import {
-	ingestSessionDetail,
-	resolveLeadSessionFile,
-	syncAllSessions,
-} from "@oh-my-pi/omp-stats/aggregator";
+import { ingestSessionDetail, resolveLeadSessionFile, syncAllSessions } from "@oh-my-pi/omp-stats/aggregator";
 import { getFileOffset, initDb } from "@oh-my-pi/omp-stats/db";
 import { STATS_ENTRY_TABLES, STATS_SESSION_TABLES } from "@oh-my-pi/pi-coding-agent/cli/gc-cli";
 import { getSessionsDir, getStatsDbPath } from "@oh-my-pi/pi-utils";
@@ -77,7 +73,9 @@ describe("observability targeted ingest", () => {
 		await fs.appendFile(file, `${line.slice(20)}\n`);
 		await ingestSessionDetail("session-partial");
 		const database = await initDb();
-		const count = database.prepare("SELECT count(*) AS count FROM obs_timeline WHERE entry_id = ?").get("obs-partial") as {
+		const count = database
+			.prepare("SELECT count(*) AS count FROM obs_timeline WHERE entry_id = ?")
+			.get("obs-partial") as {
 			count: number;
 		};
 		expect(count.count).toBe(1);
@@ -101,7 +99,9 @@ describe("observability targeted ingest", () => {
 
 		await ingestSessionDetail("session-title");
 		const database = await initDb();
-		const session = database.prepare("SELECT title, generation FROM obs_sessions WHERE id = ?").get("session-title") as {
+		const session = database
+			.prepare("SELECT title, generation FROM obs_sessions WHERE id = ?")
+			.get("session-title") as {
 			title: string;
 			generation: number;
 		};
@@ -131,7 +131,9 @@ describe("observability targeted ingest", () => {
 		await completeBackfill();
 		const database = await initDb();
 		const sessions = database.prepare("SELECT count(*) AS count FROM obs_sessions").get() as { count: number };
-		const related = database.prepare("SELECT kind FROM obs_related_transcripts ORDER BY kind").all() as Array<{ kind: string }>;
+		const related = database.prepare("SELECT kind FROM obs_related_transcripts ORDER BY kind").all() as Array<{
+			kind: string;
+		}>;
 		expect(sessions.count).toBe(1);
 		expect(related.map(row => row.kind)).toEqual(["advisor", "nested"]);
 	});
@@ -175,7 +177,10 @@ describe("observability targeted ingest", () => {
 		const file = await createLead("session-resume", [exit]);
 		await completeBackfill();
 		const database = await initDb();
-		expect((database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string }).status).toBe("completed");
+		expect(
+			(database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string })
+				.status,
+		).toBe("completed");
 
 		await fs.appendFile(
 			file,
@@ -183,7 +188,10 @@ describe("observability targeted ingest", () => {
 		);
 		await ingestSessionDetail("session-resume");
 		// Non-terminal, not live: the boundary proves the exit was superseded, nothing more.
-		expect((database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string }).status).toBe("unknown");
+		expect(
+			(database.prepare("SELECT status FROM obs_sessions WHERE id = ?").get("session-resume") as { status: string })
+				.status,
+		).toBe("unknown");
 	});
 
 	it("does not advance file offsets while the observability backfill is pending", async () => {
@@ -196,7 +204,13 @@ describe("observability targeted ingest", () => {
 
 		await completeBackfill();
 		expect(getFileOffset(file)!.offset).toBe((await fs.stat(file)).size);
-		expect((database.prepare("SELECT count(*) AS count FROM obs_timeline WHERE entry_id = ?").get("pending-obs") as { count: number }).count).toBe(1);
+		expect(
+			(
+				database.prepare("SELECT count(*) AS count FROM obs_timeline WHERE entry_id = ?").get("pending-obs") as {
+					count: number;
+				}
+			).count,
+		).toBe(1);
 	});
 
 	it("returns lock_busy with the last SQLite snapshot", async () => {

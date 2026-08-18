@@ -4,8 +4,8 @@ import type { TimeRange } from "../types";
 import {
 	canonicalizeStatsHash,
 	formatStatsHash,
-	parseStatsHash,
 	type ObservabilityTab,
+	parseStatsHash,
 	type StatsHashRoute,
 } from "./hash-route";
 

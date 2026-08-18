@@ -179,6 +179,7 @@ describe("internal-url-autocomplete", () => {
 				"security",
 				"skill",
 				"ssh",
+				"stats",
 			]);
 		});
 	});

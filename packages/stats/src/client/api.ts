@@ -1,4 +1,15 @@
 import type {
+	ObservabilityPage,
+	ObservabilityRequest,
+	RunDetail,
+	RunSummary,
+	SessionDetail,
+	SessionSummary,
+	SessionUsageSummary,
+	TimelineItem,
+	ToolUsageStats,
+} from "../shared-types";
+import type {
 	BehaviorDashboardStats,
 	CostDashboardStats,
 	FolderStats,
@@ -11,17 +22,6 @@ import type {
 	TimeRange,
 	ToolDashboardStats,
 } from "./types";
-import type {
-	ObservabilityPage,
-	ObservabilityRequest,
-	RunDetail,
-	RunSummary,
-	SessionDetail,
-	SessionSummary,
-	SessionUsageSummary,
-	TimelineItem,
-	ToolUsageStats,
-} from "../shared-types";
 
 const API_BASE = "/api";
 
@@ -225,4 +225,92 @@ export async function getResourceUsage(
 	signal?: AbortSignal,
 ): Promise<SessionUsageSummary> {
 	return fetchJson(`${API_BASE}/${kind}/${encodeURIComponent(id)}/usage`, { signal });
+}
+
+export type ModelsAdminScope = "mac" | "vps" | "both";
+
+export interface ModelsAdminChange {
+	kind:
+		| "role"
+		| "fallback"
+		| "agentOverride"
+		| "agentFrontmatter"
+		| "watchdog"
+		| "hermesModel"
+		| "hermesThinking"
+		| "hostPin";
+	id: string;
+	value: string | string[] | null;
+	hostOnly?: boolean;
+}
+
+export interface ModelsAdminSnapshot {
+	root: string;
+	kind: "home" | "checkout" | "override" | "missing";
+	present: boolean;
+	git: boolean;
+	syncScript: boolean;
+	warnings: string[];
+	catalog: string[];
+	roles: Array<{ id: string; label: string; value: string | string[]; source: string; hostOnly: boolean }>;
+	fallbacks: Array<{ id: string; label: string; value: string | string[]; source: string; hostOnly: boolean }>;
+	agents: Array<{
+		id: string;
+		group: string;
+		value: string | string[] | null;
+		source: string;
+		hasModelField: boolean;
+		hostOnly: boolean;
+	}>;
+	watchdog: Array<{ id: string; name: string; value: string; source: string }>;
+	hermes: {
+		llmModelOverride: string | null;
+		llmThinkingOverride: string | null;
+		source: string;
+		present: boolean;
+	};
+	hosts: { mac: boolean; vps: boolean };
+}
+
+export interface ModelsAdminPreview {
+	scope: ModelsAdminScope;
+	diffs: Array<{ path: string; diff: string }>;
+	files: string[];
+	warnings: string[];
+	effect: string;
+}
+
+export interface ModelsAdminApplyResult extends ModelsAdminPreview {
+	applied: boolean;
+	git?: { ok: boolean; output: string };
+	sync?: { ok: boolean; output: string };
+	message: string;
+}
+
+export async function getModelsAdmin(signal?: AbortSignal): Promise<ModelsAdminSnapshot> {
+	return fetchJson<ModelsAdminSnapshot>(`${API_BASE}/models-admin`, { signal });
+}
+
+export async function previewModelsAdmin(
+	body: { scope: ModelsAdminScope; commitMessage: string; changes: ModelsAdminChange[] },
+	signal?: AbortSignal,
+): Promise<ModelsAdminPreview> {
+	return fetchJson<ModelsAdminPreview>(`${API_BASE}/models-admin/preview`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+		signal,
+	});
+}
+
+export async function applyModelsAdmin(
+	body: { scope: ModelsAdminScope; commitMessage: string; changes: ModelsAdminChange[] },
+	signal?: AbortSignal,
+): Promise<ModelsAdminApplyResult> {
+	return fetchJson<ModelsAdminApplyResult>(`${API_BASE}/models-admin/apply`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+		signal,
+	});
 }

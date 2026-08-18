@@ -6,11 +6,12 @@ import {
 	Folder,
 	LayoutDashboard,
 	Plug,
+	Settings,
 	Smile,
-	TrendingUp,
 	SquareStack,
-	Wrench,
+	TrendingUp,
 	Workflow,
+	Wrench,
 } from "lucide-react";
 import type React from "react";
 
@@ -26,7 +27,8 @@ export type DashboardSection =
 	| "costs"
 	| "behavior"
 	| "projects"
-	| "gain";
+	| "gain"
+	| "models-admin";
 
 export interface DashboardRoute {
 	id: DashboardSection;
@@ -96,5 +98,11 @@ export const routes: DashboardRoute[] = [
 		id: "gain",
 		label: "Gain",
 		icon: TrendingUp,
+	},
+	{
+		id: "models-admin",
+		label: "Setup",
+		shortLabel: "Setup",
+		icon: Settings,
 	},
 ];
