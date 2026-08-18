@@ -4,7 +4,7 @@ import { $ } from "bun";
 import { relativeToRoot, resolveOmpTree, type OmpTree } from "./paths";
 import type { ApplyResult, ApplyScope, ModelChange, PreviewResult } from "./types";
 import { APPLY_EFFECT } from "./types";
-import { ensureAdvisorFallbackEmpty, setFrontmatterModel, setYamlPath, unifiedDiff } from "./yaml-patch";
+import { ensureAdvisorFallbackEmpty, formatScalar, setFrontmatterModel, setYamlPath, unifiedDiff } from "./yaml-patch";
 
 interface FileEdit {
 	abs: string;
@@ -28,7 +28,21 @@ function ensureAdvisor(text: string): string {
 	}
 }
 
+const AGENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function resolveAgentMarkdown(tree: OmpTree, id: string): string {
+	if (!AGENT_ID.test(id)) throw new Error(`Invalid agent id: ${id}`);
+	const agentsDir = path.resolve(tree.agentsDir);
+	const file = path.resolve(agentsDir, `${id}.md`);
+	if (!file.startsWith(`${agentsDir}${path.sep}`) || path.basename(file) !== `${id}.md`) {
+		throw new Error(`Invalid agent id: ${id}`);
+	}
+	if (!fs.existsSync(file)) throw new Error(`Unknown agent: ${id}`);
+	return file;
+}
+
 function setWatchdogModel(source: string, index: number, model: string): string {
+	const quoted = formatScalar(model);
 	const lines = source.split(/\r?\n/);
 	let advisorsIndent = -1;
 	let seen = -1;
@@ -49,12 +63,12 @@ function setWatchdogModel(source: string, index: number, model: string): string 
 					const modelLine = /^( *)model\s*:/.exec(lines[j]);
 					if (modelLine && modelLine[1].length > itemIndent) {
 						const suffix = /(#.*)$/.exec(lines[j]);
-						lines[j] = `${modelLine[1]}model: ${model}${suffix ? ` ${suffix[1]}` : ""}`;
+						lines[j] = `${modelLine[1]}model: ${quoted}${suffix ? ` ${suffix[1]}` : ""}`;
 						return lines.join("\n");
 					}
 					if (j > i && /^( *)-\s+/.test(lines[j])) break;
 				}
-				lines.splice(i + 1, 0, `${" ".repeat(itemIndent + 2)}model: ${model}`);
+				lines.splice(i + 1, 0, `${" ".repeat(itemIndent + 2)}model: ${quoted}`);
 				return lines.join("\n");
 			}
 		}
@@ -132,10 +146,15 @@ function applyChange(tree: OmpTree, edits: Map<string, FileEdit>, scope: ApplySc
 
 	if (change.kind === "role" || change.kind === "fallback" || change.kind === "agentOverride") {
 		sharedConfig();
+		if (change.kind === "role" && change.id === "advisor" && fs.existsSync(tree.watchdogYml)) {
+			upsertEdit(edits, tree, tree.watchdogYml, text =>
+				setWatchdogModel(text, 0, String(change.value ?? "")),
+			);
+		}
 		return;
 	}
 	if (change.kind === "agentFrontmatter") {
-		const file = path.join(tree.agentsDir, `${change.id}.md`);
+		const file = resolveAgentMarkdown(tree, change.id);
 		upsertEdit(edits, tree, file, text => setFrontmatterModel(text, change.value));
 		return;
 	}
@@ -205,7 +224,8 @@ async function runGit(tree: OmpTree, files: string[], message: string): Promise<
 	if (add.exitCode !== 0) {
 		return { ok: false, output: add.text().trim() || `git add failed (${add.exitCode})` };
 	}
-	const commit = await $`git -C ${tree.root} commit -m ${message}`.quiet().nothrow();
+	// --only + pathspec keeps any pre-staged leftover out of this commit.
+	const commit = await $`git -C ${tree.root} commit --only -m ${message} -- ${files}`.quiet().nothrow();
 	if (commit.exitCode !== 0) {
 		return { ok: false, output: commit.text().trim() || `git commit failed (${commit.exitCode})` };
 	}
@@ -285,6 +305,12 @@ export function parseApplyBody(body: unknown): { changes: ModelChange[]; scope: 
 			throw new Error(`changes[${index}].kind is invalid`);
 		}
 		if (typeof item.id !== "string" || !item.id) throw new Error(`changes[${index}].id is required`);
+		if (kind === "agentFrontmatter" || kind === "agentOverride") {
+			if (!AGENT_ID.test(item.id)) throw new Error(`changes[${index}].id is not a valid agent id`);
+		}
+		if (kind === "watchdog" && !/^\d+$/.test(item.id)) {
+			throw new Error(`changes[${index}].id must be a watchdog advisor index`);
+		}
 		const value = item.value;
 		if (
 			value !== null &&

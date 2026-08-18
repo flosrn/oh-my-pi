@@ -36,14 +36,30 @@ function asModelValue(value: unknown): string | string[] | null {
 	return scalar;
 }
 
-function collectModels(value: unknown, into: Set<string>): void {
+const MODEL_SELECTOR_KEYS: Record<string, true> = { id: true, model: true };
+
+/** Walk role/override maps — every string value is a selector. */
+function collectSelectors(value: unknown, into: Set<string>): void {
 	if (typeof value === "string" && value.trim()) into.add(value.trim());
-	else if (Array.isArray(value)) for (const item of value) collectModels(item, into);
+	else if (Array.isArray(value)) for (const item of value) collectSelectors(item, into);
 	else if (value && typeof value === "object") {
-		for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-			if (key === "id" || key === "model" || key === "name") collectModels(child, into);
-			else collectModels(child, into);
-		}
+		for (const child of Object.values(value as Record<string, unknown>)) collectSelectors(child, into);
+	}
+}
+
+/**
+ * Walk models.yml / config.models. Only `id` and `model` are selectors.
+ * Recursing every property would put apiKey / baseUrl / headers in the datalist.
+ */
+function collectCatalogModels(value: unknown, into: Set<string>): void {
+	if (Array.isArray(value)) {
+		for (const item of value) collectCatalogModels(item, into);
+		return;
+	}
+	if (!value || typeof value !== "object") return;
+	for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+		if (MODEL_SELECTOR_KEYS[key]) collectSelectors(child, into);
+		else collectCatalogModels(child, into);
 	}
 }
 
@@ -90,11 +106,11 @@ export function loadSnapshot(tree = resolveOmpTree()): ModelsAdminSnapshot {
 	>;
 
 	const catalog = new Set<string>();
-	collectModels(config.models, catalog);
-	collectModels(modelsFile, catalog);
-	collectModels(modelRoles, catalog);
-	collectModels(overrides, catalog);
-	collectModels(watchdog, catalog);
+	collectCatalogModels(config.models, catalog);
+	collectCatalogModels(modelsFile, catalog);
+	collectSelectors(modelRoles, catalog);
+	collectSelectors(overrides, catalog);
+	collectSelectors(fallbacks, catalog);
 
 	const roles: RoleAssignment[] = Object.entries(modelRoles).map(([id, value]) => ({
 		id,

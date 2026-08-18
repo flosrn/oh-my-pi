@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { applyChanges, buildPreview } from "../src/models-admin/apply";
+import { $ } from "bun";
+import { applyChanges, buildPreview, parseApplyBody } from "../src/models-admin/apply";
 import type { OmpTree } from "../src/models-admin/paths";
 
 const SHARED = `# Shared OMP config
@@ -111,5 +112,65 @@ describe("apply scope", () => {
 		expect(fs.readFileSync(tree.configYml, "utf8")).toBe(before);
 		expect(fs.readFileSync(tree.macHostYml, "utf8")).toContain("google/gemini-2.5-pro:high");
 		expect(fs.readFileSync(tree.macHostYml, "utf8")).toContain("# host-only");
+	});
+});
+
+describe("apply safety", () => {
+	it("quotes @role aliases when writing WATCHDOG.yml", async () => {
+		const tree = makeTree();
+		trees.push(tree.root);
+		await applyChanges([{ kind: "watchdog", id: "0", value: "@smol" }], "mac", "test", tree);
+		expect(fs.readFileSync(tree.watchdogYml, "utf8")).toContain('model: "@smol"');
+		expect(fs.readFileSync(tree.watchdogYml, "utf8")).not.toContain("model: @smol\n");
+	});
+
+	it("writes WATCHDOG.yml when the advisor role changes", async () => {
+		const tree = makeTree();
+		trees.push(tree.root);
+		await applyChanges([{ kind: "role", id: "advisor", value: "openai/gpt-4.1:high" }], "mac", "test", tree);
+		expect(fs.readFileSync(tree.configYml, "utf8")).toContain("  advisor: openai/gpt-4.1:high");
+		expect(fs.readFileSync(tree.watchdogYml, "utf8")).toContain("    model: openai/gpt-4.1:high");
+	});
+
+	it("rejects agent ids that escape agentsDir", () => {
+		const tree = makeTree();
+		trees.push(tree.root);
+		expect(() =>
+			parseApplyBody({
+				scope: "mac",
+				changes: [{ kind: "agentFrontmatter", id: "../../README", value: "x" }],
+			}),
+		).toThrow(/valid agent id/);
+		expect(() =>
+			buildPreview([{ kind: "agentFrontmatter", id: "../../README", value: "x" }], "mac", tree),
+		).toThrow(/Invalid agent id/);
+		expect(fs.existsSync(path.join(tree.root, "README.md"))).toBe(false);
+	});
+
+	it("commits only the admin files when the index already has other staged work", async () => {
+		const tree = makeTree();
+		trees.push(tree.root);
+		tree.git = true;
+		await $`git -C ${tree.root} init`.quiet();
+		await $`git -C ${tree.root} config user.email test@example.com`.quiet();
+		await $`git -C ${tree.root} config user.name test`.quiet();
+		await $`git -C ${tree.root} add -A`.quiet();
+		await $`git -C ${tree.root} commit -m init`.quiet();
+		fs.writeFileSync(path.join(tree.root, "leftover.txt"), "staged leftover\n");
+		await $`git -C ${tree.root} add leftover.txt`.quiet();
+
+		const result = await applyChanges(
+			[{ kind: "role", id: "default", value: "openai/gpt-4.1:high" }],
+			"both",
+			"admin models",
+			tree,
+		);
+		expect(result.applied).toBe(true);
+		expect(result.git?.ok).toBe(true);
+		const names = (await $`git -C ${tree.root} show --pretty=format: --name-only HEAD`.quiet()).text();
+		expect(names).toContain("agent/config.yml");
+		expect(names).not.toContain("leftover.txt");
+		const staged = (await $`git -C ${tree.root} diff --cached --name-only`.quiet()).text();
+		expect(staged).toContain("leftover.txt");
 	});
 });

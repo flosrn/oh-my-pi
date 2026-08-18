@@ -21,7 +21,7 @@ import {
 import { decodeEmbeddedClientArchive } from "./embedded-client";
 import embeddedClientArchiveTxt from "./embedded-client.generated.txt";
 import { getGainDashboardStats } from "./gain-aggregator";
-import { applyChanges, buildPreview, loadSnapshot, parseApplyBody } from "./models-admin";
+import { allowDashboardMutation, applyChanges, buildPreview, loadSnapshot, parseApplyBody } from "./models-admin";
 import {
 	prepareStatsPort,
 	recoverStatsPort,
@@ -486,6 +486,9 @@ async function handleApiRequest(req: Request): Promise<Response> {
 
 	if (path === "/api/models-admin/preview" || path === "/api/models-admin/apply") {
 		if (req.method !== "POST") return methodNotAllowed("POST");
+		if (!allowDashboardMutation(req)) {
+			return jsonResponse({ error: "Cross-origin dashboard mutation rejected" }, { status: 403 });
+		}
 		let body: unknown;
 		try {
 			body = await req.json();
