@@ -28,6 +28,10 @@ function makeTree(): OmpTree {
 `,
 	);
 	fs.writeFileSync(path.join(agentDir, "WATCHDOG.yml"), `advisors:\n  - name: primary\n    model: "@smol"\n`);
+	fs.writeFileSync(
+		path.join(agentDir, "agents", "scout.md"),
+		`---\nname: scout\nmodel: "@smol"\n---\nbody\n`,
+	);
 	return {
 		root,
 		agentDir,

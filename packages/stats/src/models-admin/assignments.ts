@@ -136,8 +136,8 @@ export function loadSnapshot(tree = resolveOmpTree()): ModelsAdminSnapshot {
 		const fm = parseYaml(split?.fm ?? null);
 		const front = asModelValue(fm.model);
 		const override = asModelValue(overrides[id]);
-		if (front) collectModels(front, catalog);
-		if (override) collectModels(override, catalog);
+		if (front) collectSelectors(front, catalog);
+		if (override) collectSelectors(override, catalog);
 		agents.push({
 			id,
 			group: agentGroup(id),
