@@ -282,6 +282,83 @@ function ModelsAdminSections(props: {
 	const { snapshot, catalog, drafts, setDraft } = props;
 	return (
 		<>
+			<Panel title="Apply" subtitle="Preview diffs, then write. No process restart.">
+				<div className="flex flex-col gap-3 min-w-0">
+					<SegmentedControl
+						value={props.scope}
+						onChange={props.setScope}
+						options={[
+							{ value: "both", label: "Both", title: "Shared files, commit, sync script" },
+							{ value: "mac", label: "Mac only", title: "Write local files only" },
+							{ value: "vps", label: "VPS only", title: "Write hosts/gapicore.yml, commit, sync" },
+						]}
+					/>
+					<label className="flex flex-col gap-1 min-w-0">
+						<span className="stats-mobile-card-label">Commit message</span>
+						<input
+							className="stats-combobox-input"
+							spellCheck={false}
+							autoComplete="off"
+							value={props.commitMessage}
+							onChange={event => props.setCommitMessage(event.target.value)}
+						/>
+					</label>
+					<div className="flex flex-wrap gap-2">
+						<button type="button" className="stats-button" disabled={props.busy !== null} onClick={props.onPreview}>
+							{props.busy === "preview" ? "Previewing…" : "Preview diffs"}
+						</button>
+						<button
+							type="button"
+							className="stats-button stats-button-primary"
+							disabled={props.busy !== null}
+							onClick={props.onApply}
+						>
+							{props.busy === "apply" ? "Applying…" : "Apply"}
+						</button>
+					</div>
+					{props.formError && <div className="stats-text-danger text-sm">{props.formError}</div>}
+					{props.result && (
+						<div className="flex flex-col gap-2 min-w-0">
+							<StatusPill variant={props.result.applied ? "success" : "warning"}>{props.result.message}</StatusPill>
+							{props.result.git && (
+								<pre className="stats-text-primary text-xs whitespace-pre-wrap break-words">
+									git: {props.result.git.ok ? "ok" : "error"} {props.result.git.output}
+								</pre>
+							)}
+							{props.result.sync && (
+								<pre className="stats-text-primary text-xs whitespace-pre-wrap break-words">
+									sync: {props.result.sync.ok ? "ok" : "error"} {props.result.sync.output}
+								</pre>
+							)}
+						</div>
+					)}
+					{(props.preview?.diffs.length ?? 0) > 0 && (
+						<div className="flex flex-col gap-3 min-w-0">
+							<div className="stats-font-semibold">Preview</div>
+							{props.preview?.files.map(file => (
+								<div key={file} className="font-mono text-xs">
+									{file}
+								</div>
+							))}
+							{props.preview?.diffs.map(file => (
+								<pre
+									key={file.path}
+									className="text-xs whitespace-pre-wrap break-words overflow-x-hidden rounded p-3"
+									style={{
+										background: "var(--stats-surface, transparent)",
+										border: "1px solid var(--stats-border, currentColor)",
+									}}
+								>
+									{file.diff}
+								</pre>
+							))}
+						</div>
+					)}
+					<div className="text-sm stats-text-primary">
+						Roles and advisor take effect on a new session. Agent pins take effect on the next task spawn.
+					</div>
+				</div>
+			</Panel>
 			<Panel title="Roles" subtitle="modelRoles in agent/config.yml. Advisor also writes WATCHDOG.yml.">
 				<AssignmentTable
 					rows={snapshot.roles.map(item => ({
@@ -364,83 +441,6 @@ function ModelsAdminSections(props: {
 							onChange={value => setDraft("hermes:thinking", value)}
 						/>
 					</label>
-				</div>
-			</Panel>
-			<Panel title="Apply" subtitle="Preview diffs, then write. No process restart.">
-				<div className="flex flex-col gap-3 min-w-0">
-					<SegmentedControl
-						value={props.scope}
-						onChange={props.setScope}
-						options={[
-							{ value: "both", label: "Both", title: "Shared files, commit, sync script" },
-							{ value: "mac", label: "Mac only", title: "Write local files only" },
-							{ value: "vps", label: "VPS only", title: "Write hosts/gapicore.yml, commit, sync" },
-						]}
-					/>
-					<label className="flex flex-col gap-1 min-w-0">
-						<span className="stats-mobile-card-label">Commit message</span>
-						<input
-							className="stats-combobox-input"
-							spellCheck={false}
-							autoComplete="off"
-							value={props.commitMessage}
-							onChange={event => props.setCommitMessage(event.target.value)}
-						/>
-					</label>
-					<div className="flex flex-wrap gap-2">
-						<button type="button" className="stats-button" disabled={props.busy !== null} onClick={props.onPreview}>
-							{props.busy === "preview" ? "Previewing…" : "Preview diffs"}
-						</button>
-						<button
-							type="button"
-							className="stats-button stats-button-primary"
-							disabled={props.busy !== null}
-							onClick={props.onApply}
-						>
-							{props.busy === "apply" ? "Applying…" : "Apply"}
-						</button>
-					</div>
-					{props.formError && <div className="stats-text-danger text-sm">{props.formError}</div>}
-					{props.result && (
-						<div className="flex flex-col gap-2 min-w-0">
-							<StatusPill variant={props.result.applied ? "success" : "warning"}>{props.result.message}</StatusPill>
-							{props.result.git && (
-								<pre className="stats-text-primary text-xs whitespace-pre-wrap break-words">
-									git: {props.result.git.ok ? "ok" : "error"} {props.result.git.output}
-								</pre>
-							)}
-							{props.result.sync && (
-								<pre className="stats-text-primary text-xs whitespace-pre-wrap break-words">
-									sync: {props.result.sync.ok ? "ok" : "error"} {props.result.sync.output}
-								</pre>
-							)}
-						</div>
-					)}
-					{(props.preview?.diffs.length ?? 0) > 0 && (
-						<div className="flex flex-col gap-3 min-w-0">
-							<div className="stats-font-semibold">Preview</div>
-							{props.preview?.files.map(file => (
-								<div key={file} className="font-mono text-xs">
-									{file}
-								</div>
-							))}
-							{props.preview?.diffs.map(file => (
-								<pre
-									key={file.path}
-									className="text-xs whitespace-pre-wrap break-words overflow-x-hidden rounded p-3"
-									style={{
-										background: "var(--stats-surface, transparent)",
-										border: "1px solid var(--stats-border, currentColor)",
-									}}
-								>
-									{file.diff}
-								</pre>
-							))}
-						</div>
-					)}
-					<div className="text-sm stats-text-primary">
-						Roles and advisor take effect on a new session. Agent pins take effect on the next task spawn.
-					</div>
 				</div>
 			</Panel>
 		</>
