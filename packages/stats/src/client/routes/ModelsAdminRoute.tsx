@@ -343,11 +343,9 @@ function ModelsAdminSections(props: {
 					<label className="flex flex-col gap-1 min-w-0">
 						<span className="stats-mobile-card-label">llmThinkingOverride</span>
 						<input
-							className="font-mono w-full min-w-0 rounded px-2 py-1 stats-text-primary"
-							style={{
-								background: "var(--stats-surface, transparent)",
-								border: "1px solid var(--stats-border, currentColor)",
-							}}
+							className="stats-combobox-input"
+							spellCheck={false}
+							autoComplete="off"
 							value={drafts["hermes:thinking"] ?? snapshot.hermes.llmThinkingOverride ?? ""}
 							onChange={event => setDraft("hermes:thinking", event.target.value)}
 						/>
@@ -368,11 +366,9 @@ function ModelsAdminSections(props: {
 					<label className="flex flex-col gap-1 min-w-0">
 						<span className="stats-mobile-card-label">Commit message</span>
 						<input
-							className="w-full min-w-0 rounded px-2 py-1 stats-text-primary"
-							style={{
-								background: "var(--stats-surface, transparent)",
-								border: "1px solid var(--stats-border, currentColor)",
-							}}
+							className="stats-combobox-input"
+							spellCheck={false}
+							autoComplete="off"
 							value={props.commitMessage}
 							onChange={event => props.setCommitMessage(event.target.value)}
 						/>
