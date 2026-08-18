@@ -10,6 +10,13 @@ import {
 } from "../api";
 import { useResource } from "../data/useResource";
 import { AsyncBoundary, Panel, SegmentedControl, StatusPill } from "../ui";
+import {
+	HERMES_MODELS,
+	HERMES_THINKING,
+	pickerOptions,
+	suggestionsForAgent,
+	suggestionsForRole,
+} from "./model-suggestions";
 
 export interface ModelsAdminRouteProps {
 	active: boolean;
@@ -18,26 +25,26 @@ export interface ModelsAdminRouteProps {
 
 type Scope = "mac" | "vps" | "both";
 
-function filterCatalog(query: string, catalog: string[]): string[] {
-	const needle = query.trim().toLowerCase();
-	if (!needle) return catalog;
-	return catalog.filter(item => item.toLowerCase().includes(needle));
-}
-
 function ModelPicker({
 	value,
+	suggestions,
 	catalog,
 	onChange,
 }: {
 	value: string;
+	suggestions: string[];
 	catalog: string[];
 	onChange: (next: string) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const [typed, setTyped] = useState(false);
 	const [highlight, setHighlight] = useState(0);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const listId = useId();
-	const matches = useMemo(() => filterCatalog(value, catalog).slice(0, 40), [catalog, value]);
+	const matches = useMemo(
+		() => pickerOptions(typed ? value : "", suggestions, catalog, value),
+		[catalog, suggestions, typed, value],
+	);
 
 	useEffect(() => {
 		if (!open) return;
@@ -50,6 +57,7 @@ function ModelPicker({
 
 	const pick = (next: string) => {
 		onChange(next);
+		setTyped(false);
 		setOpen(false);
 	};
 
@@ -67,10 +75,12 @@ function ModelPicker({
 				placeholder="provider/model:effort"
 				title={value}
 				onFocus={() => {
+					setTyped(false);
 					setOpen(true);
 					setHighlight(0);
 				}}
 				onChange={event => {
+					setTyped(true);
 					onChange(event.target.value);
 					setOpen(true);
 					setHighlight(0);
@@ -281,6 +291,7 @@ function ModelsAdminSections(props: {
 						meta: item.source,
 					}))}
 					catalog={catalog}
+					suggestions={suggestionsForRole}
 					onChange={(id, value) => setDraft(`role:${id}`, value)}
 				/>
 			</Panel>
@@ -294,6 +305,7 @@ function ModelsAdminSections(props: {
 						locked: item.id === "advisor",
 					}))}
 					catalog={catalog}
+					suggestions={suggestionsForRole}
 					onChange={(id, value) => setDraft(`fallback:${id}`, value)}
 				/>
 			</Panel>
@@ -312,6 +324,7 @@ function ModelsAdminSections(props: {
 									meta: item.hasModelField ? "frontmatter" : "no model field",
 								}))}
 								catalog={catalog}
+								suggestions={suggestionsForAgent}
 								onChange={(id, value) => setDraft(`agent:${id}`, value)}
 							/>
 						</div>
@@ -327,6 +340,7 @@ function ModelsAdminSections(props: {
 						meta: item.source,
 					}))}
 					catalog={catalog}
+					suggestions={() => suggestionsForRole("advisor")}
 					onChange={(id, value) => setDraft(`watchdog:${id}`, value)}
 				/>
 			</Panel>
@@ -336,18 +350,18 @@ function ModelsAdminSections(props: {
 						<span className="stats-mobile-card-label">llmModelOverride</span>
 						<ModelPicker
 							value={drafts["hermes:model"] ?? snapshot.hermes.llmModelOverride ?? ""}
+							suggestions={HERMES_MODELS}
 							catalog={catalog}
 							onChange={value => setDraft("hermes:model", value)}
 						/>
 					</label>
 					<label className="flex flex-col gap-1 min-w-0">
 						<span className="stats-mobile-card-label">llmThinkingOverride</span>
-						<input
-							className="stats-combobox-input"
-							spellCheck={false}
-							autoComplete="off"
+						<ModelPicker
 							value={drafts["hermes:thinking"] ?? snapshot.hermes.llmThinkingOverride ?? ""}
-							onChange={event => setDraft("hermes:thinking", event.target.value)}
+							suggestions={HERMES_THINKING}
+							catalog={HERMES_THINKING}
+							onChange={value => setDraft("hermes:thinking", value)}
 						/>
 					</label>
 				</div>
@@ -436,10 +450,12 @@ function ModelsAdminSections(props: {
 function AssignmentTable({
 	rows,
 	catalog,
+	suggestions,
 	onChange,
 }: {
 	rows: Array<{ id: string; label: string; value: string; meta?: string; locked?: boolean }>;
 	catalog: string[];
+	suggestions: (id: string) => string[];
 	onChange: (id: string, value: string) => void;
 }) {
 	if (rows.length === 0) return <div className="stats-table-empty">Nothing to show</div>;
@@ -457,7 +473,12 @@ function AssignmentTable({
 						{item.locked ? (
 							<StatusPill variant="info">[] locked</StatusPill>
 						) : (
-							<ModelPicker value={item.value} catalog={catalog} onChange={value => onChange(item.id, value)} />
+							<ModelPicker
+								value={item.value}
+								suggestions={suggestions(item.id)}
+								catalog={catalog}
+								onChange={value => onChange(item.id, value)}
+							/>
 						)}
 					</div>
 					<div className="stats-assign-source" title={item.meta}>
