@@ -16,6 +16,9 @@ function validateMaxContextWindow(
 	return true;
 }
 
+/** RFC 9110 `token`: the characters a header field name may contain. */
+const HTTP_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
 export const getModelsConfigSchemaBundle = once(() => {
 	const OpenRouterRoutingSchema = type({
 		"only?": "string[]",
@@ -362,12 +365,19 @@ export const getModelsConfigSchemaBundle = once(() => {
 		 * `upstreamProvider`, `account` → `upstreamAccount`, `fallbackAttempts` →
 		 * `upstreamFallbackAttempts` (a non-negative integer).
 		 */
-		"servedHeaders?": {
+		"servedHeaders?": type({
 			"model?": "string",
 			"provider?": "string",
 			"account?": "string",
 			"fallbackAttempts?": "string",
-		},
+		}).narrow((value, ctx) => {
+			for (const [field, name] of Object.entries(value)) {
+				if (typeof name === "string" && !HTTP_TOKEN.test(name)) {
+					return ctx.mustBe(`servedHeaders.${field} a valid HTTP header name (got ${JSON.stringify(name)})`);
+				}
+			}
+			return true;
+		}),
 		/**
 		 * Streaming transport override. When set to `"pi-native"`, omp dispatches
 		 * every model under this provider via the auth-gateway's

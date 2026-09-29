@@ -102,3 +102,21 @@ describe("models.yml compat.stripImageInput (#11697)", () => {
 		}
 	});
 });
+
+describe("models.yml servedHeaders", () => {
+	const withServedHeaders = (servedHeaders: Record<string, string>) => ({
+		providers: { router: { baseUrl, apiKey: "placeholder-key", servedHeaders } },
+	});
+
+	test("accepts header names that are valid HTTP tokens", () => {
+		const checked = ModelsConfigSchema(withServedHeaders({ model: "x-served-model", account: "X-Served_Account" }));
+		if (checked instanceof OmpErrors) throw new Error(checked.summary);
+		expect(checked.providers?.router?.servedHeaders?.account).toBe("X-Served_Account");
+	});
+
+	test("rejects a header name that is not an HTTP token, naming the field", () => {
+		const checked = ModelsConfigSchema(withServedHeaders({ account: "x bad" }));
+		if (!(checked instanceof OmpErrors)) throw new Error("expected the schema to reject an invalid header name");
+		expect(checked.summary).toContain("servedHeaders.account");
+	});
+});
