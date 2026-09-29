@@ -151,6 +151,7 @@ Must define at least one of:
 - `disableStrictTools`
 - `modelOverrides`
 - `discovery`
+- `servedHeaders`
 - `remoteCompaction`
 
 ### Discovery
@@ -227,8 +228,15 @@ Provider defaults vs per-model overrides:
 - Model `headers` override provider header keys.
 - `modelOverrides` can override model metadata (`name`, `reasoning`, `thinking`, `input`, `imageInputDecoder`,
   `tokenizer`, `supportsTools`, `cost`, `promptCache`, `premiumMultiplier`, `contextWindow`, `maxContextWindow`, `maxTokens`,
-  `omitMaxOutputTokens`, `headers`, `compat`, `contextPromotionTarget`, `compactionModel`, and
-  `remoteCompaction`).
+  `omitMaxOutputTokens`, `headers`, `compat`, `contextPromotionTarget`, `compactionModel`,
+  `remoteCompaction`, and `expectedUpstreamModel`).
+- Provider `servedHeaders` is for model routers that name the target serving each request in response
+  headers. It maps `model`, `provider`, `account`, and `fallbackAttempts` to those header names; each
+  declared header is recorded on the turn's assistant message and shown on the status line, Agent Hub,
+  and job rows. Providers without it ignore those headers.
+- Model `expectedUpstreamModel` (per model or in `modelOverrides`) is the bare model id the router is
+  expected to serve, exactly as its served-model header reports it; the status line shows the served
+  `provider/model` only when it differs.
 - `compat` is deep-merged for nested routing blocks (`openRouterRouting`, `vercelGatewayRouting`,
   `extraBody`, and `whenThinking`).
 

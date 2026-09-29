@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The status line model segment, Agent Hub, and job rows can show the provider, model, and account a router reports as having served the turn.
+
 ## [18.4.3] - 2026-09-28
 
 ### Changed

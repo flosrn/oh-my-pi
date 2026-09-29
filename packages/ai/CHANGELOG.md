@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Providers can declare `servedHeaders` to record the target a router reports as having served each turn; assistant messages now carry `upstreamAccount` and `upstreamFallbackAttempts` alongside the served provider and model.
+
 ## [18.4.3] - 2026-09-28
 
 ### Added

@@ -4,7 +4,7 @@
 
 ### Added
 
-- When a router reports the target that served a turn, the status line model segment shows the serving account (plus `→ provider/model` when it differs from the model's `expectedUpstreamModel`, and `↻N` for failed router attempts), and the Agent Hub and subagent/job rows append `→ provider/model · account` after the requested model. Accounts render through the new `modelDisplay.accountAliases` map (email → alias, else the email's local part) and providers through `modelDisplay.providerAliases`.
+- Show the provider, model, and account a router reports as serving each turn on the status line, Agent Hub, and job rows, with `modelDisplay.accountAliases`/`modelDisplay.providerAliases` for short names.
 
 ## [18.4.3] - 2026-09-28
 

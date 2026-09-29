@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `servedHeaders` and `expectedUpstreamModel` to `Model` and `ModelSpec` for routers that report the target serving each request.
+
 ## [18.4.3] - 2026-09-28
 
 ### Added
