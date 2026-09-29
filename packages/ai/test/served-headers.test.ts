@@ -220,6 +220,7 @@ describe("served headers on anthropic-messages", () => {
 			upstreamAccount: "alice@example.com",
 			upstreamFallbackAttempts: 2,
 		});
+		expect(result.upstreamFromHeaders).toBe(true);
 	});
 
 	it("prefers the declared model header over the model named by a signed thinking block", async () => {
@@ -237,11 +238,10 @@ describe("served headers on anthropic-messages", () => {
 
 	it("completes the turn with the field unset when a runtime model declares an invalid header name", async () => {
 		const { fetch } = sequenceFetch([() => anthropicResponse(ALL_HEADERS)]);
-		const result = await streamAnthropic(
-			anthropicModel({ ...SERVED_HEADERS, account: "x bad" }),
-			context,
-			{ apiKey: "sk-test", fetch },
-		).result();
+		const result = await streamAnthropic(anthropicModel({ ...SERVED_HEADERS, account: "x bad" }), context, {
+			apiKey: "sk-test",
+			fetch,
+		}).result();
 
 		expect(result.stopReason).toBe("stop");
 		expect(served(result)).toEqual({
@@ -285,6 +285,7 @@ describe("served headers on anthropic-messages", () => {
 
 		expect(result.stopReason).toBe("stop");
 		expect(served(result)).toEqual(NONE);
+		expect(result.upstreamFromHeaders).toBeUndefined();
 	});
 
 	it("leaves only the field whose header is missing unset", async () => {

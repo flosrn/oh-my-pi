@@ -58,6 +58,7 @@ export function clearServedTarget(output: AssistantMessage): void {
 	output.upstreamProvider = undefined;
 	output.upstreamAccount = undefined;
 	output.upstreamFallbackAttempts = undefined;
+	output.upstreamFromHeaders = undefined;
 }
 
 /**
@@ -71,6 +72,7 @@ export function clearServedTarget(output: AssistantMessage): void {
 export function captureServedTarget(output: AssistantMessage, response: Response, model: Model<Api>): void {
 	const declared = model.servedHeaders;
 	if (!declared) return;
+	output.upstreamFromHeaders = true;
 	const { headers } = response;
 	output.upstreamModel = readServedHeader(headers, declared.model);
 	output.upstreamProvider = readServedHeader(headers, declared.provider);

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { SegmentContext } from "../src/status-line/segments";
-import { renderSegment } from "../src/status-line/segments";
+import { renderSegment, servedTailTurn } from "../src/status-line/segments";
 import { initTheme, theme } from "../src/theme";
 import { setSymbolPreset } from "../src/theme/theme";
 
@@ -177,14 +177,16 @@ describe("status line model segment compact thinking level", () => {
 
 describe("status line model segment served target", () => {
 	const aliases = { accountAliases: { "alice@example.com": "a" } };
+	const servedHeaders = { model: "x-served-model", provider: "x-served-provider", account: "x-served-account" };
 	const handle = {
 		id: "opus-5.5",
 		name: "Opus 5.5",
 		provider: "router",
 		thinking: true,
 		expectedUpstreamModel: "claude-opus-5-5",
+		servedHeaders,
 	};
-	const pool = { id: "task", name: "Task", provider: "router", thinking: true };
+	const pool = { id: "task", name: "Task", provider: "router", thinking: true, servedHeaders };
 
 	function assistant(model: { id: string; provider: string }, served: Record<string, unknown>) {
 		return { role: "assistant", provider: model.provider, model: model.id, content: [], ...served };
@@ -306,6 +308,35 @@ describe("status line model segment served target", () => {
 		expect(renderSegment("model", ctx).content).toBe(renderSegment("model", createServedContext(native, [])).content);
 	});
 
+	it("renders byte-identically for a provider that declares no served headers", () => {
+		// Native Anthropic recovers the served model from the thinking signature.
+		const native = { id: "claude-opus-4-6", name: "Opus 4.6", provider: "anthropic", thinking: true };
+		const ctx = createServedContext(native, [
+			assistant(native, { upstreamModel: "claude-opus-4-6-20260101", stopReason: "stop" }),
+		]);
+		expect(renderSegment("model", ctx).content).toBe(renderSegment("model", createServedContext(native, [])).content);
+		expect(servedTailTurn(ctx)).toBeUndefined();
+	});
+
+	it("keeps the last successful turn's target across an errored or aborted turn", () => {
+		const base = plain(createServedContext(pool, []));
+		const served = assistant(pool, {
+			upstreamProvider: "cx",
+			upstreamModel: "gpt-6-sol",
+			upstreamAccount: "alice@example.com",
+			stopReason: "stop",
+		});
+		for (const stopReason of ["error", "aborted"]) {
+			const failed = assistant(pool, {
+				upstreamProvider: "cc",
+				upstreamModel: "claude-sonnet-5",
+				upstreamAccount: "bob@example.com",
+				stopReason,
+			});
+			expect(plain(createServedContext(pool, [served, failed]))).toBe(`${base} → cx/gpt-6-sol${theme.sep.dot}a`);
+		}
+	});
+
 	it("drops the arrow first, then hops, and the alias last", () => {
 		const messages = [
 			assistant(pool, {
@@ -330,7 +361,7 @@ describe("status line served markers under the ASCII symbol preset", () => {
 
 	it("renders the served arrow and hop marker as ASCII fallbacks", async () => {
 		await setSymbolPreset("ascii");
-		const model = { id: "task", name: "Task", provider: "router" };
+		const model = { id: "task", name: "Task", provider: "router", servedHeaders: { model: "x-served-model" } };
 		const ctx: SegmentContext = {
 			...createModelContext(false),
 			modelDisplayAliases: { accountAliases: { "alice@example.com": "a" } },

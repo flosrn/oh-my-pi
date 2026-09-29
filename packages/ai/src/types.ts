@@ -1135,6 +1135,12 @@ export interface AssistantMessage {
 	 * `servedHeaders.fallbackAttempts`. Undefined when not reported.
 	 */
 	upstreamFallbackAttempts?: number;
+	/**
+	 * Set when the upstream* fields were captured from the provider's declared
+	 * `servedHeaders`. Inference-only values (thinking signature, OpenRouter,
+	 * Devin) never set it.
+	 */
+	upstreamFromHeaders?: true;
 	usage: Usage;
 	stopReason: StopReason;
 	stopDetails?: StopDetails | null;

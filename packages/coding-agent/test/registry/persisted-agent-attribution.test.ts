@@ -228,12 +228,15 @@ describe("persisted agent model attribution", () => {
 
 const ROUTER = { provider: "router", model: "task" };
 
-/** An assistant turn a router served, carrying the `upstream*` fields it reported. */
+/**
+ * An assistant turn a router served, carrying the `upstream*` fields it
+ * reported through the headers its provider declares.
+ */
 function routedAssistant(id: string, parentId: string, upstream: Record<string, unknown>): string {
 	const record = JSON.parse(assistant(id, parentId, ROUTER, "stop", [{ type: "text", text: `${id} answered` }])) as {
 		message: Record<string, unknown>;
 	};
-	Object.assign(record.message, upstream);
+	Object.assign(record.message, upstream, { upstreamFromHeaders: true });
 	return JSON.stringify(record);
 }
 
@@ -272,6 +275,20 @@ describe("persisted agent served target", () => {
 		const history = registry.get("Native")?.history;
 		expect(history?.served).toBeUndefined();
 		expect(history?.metrics?.requests).toBe(2);
+	});
+
+	it("reports no served target for a turn whose provider declares no served headers", async () => {
+		using tempDir = TempDir.createSync("@omp-served-undeclared-");
+		// Native Anthropic recovers the served model from the thinking signature.
+		const signed = JSON.parse(assistant("a1", "si", SONNET, "stop", [{ type: "text", text: "signed" }])) as {
+			message: Record<string, unknown>;
+		};
+		signed.message.upstreamModel = "claude-opus-4-6";
+		const registry = await historyFor(tempDir.path(), "Undeclared", [...transcriptHead(), JSON.stringify(signed)]);
+
+		const history = registry.get("Undeclared")?.history;
+		expect(history?.resolvedModel).toBe("anthropic/claude-sonnet-5");
+		expect(history && "served" in history).toBe(false);
 	});
 
 	it("sets nothing for a transcript written before served fields existed", async () => {

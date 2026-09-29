@@ -41,7 +41,13 @@ describe("status line served target on a narrow bar", () => {
 	});
 
 	function modelOnlyBar(messages: unknown[]): StatusLineComponent {
-		const model = { id: "task", name: "Task", provider: "router", contextWindow: 100_000 };
+		const model = {
+			id: "task",
+			name: "Task",
+			provider: "router",
+			contextWindow: 100_000,
+			servedHeaders: { model: "x-served-model" },
+		};
 		const session = {
 			state: { messages, model },
 			messages,
@@ -112,8 +118,9 @@ describe("InteractiveMode status line after an alias edit", () => {
 		await Settings.init({ inMemory: true, cwd: tempDir.path() });
 		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
 		const modelRegistry = new ModelRegistry(authStorage);
-		const model = modelRegistry.find("anthropic", "claude-sonnet-4-5");
-		if (!model) throw new Error("Expected claude-sonnet-4-5 to exist in registry");
+		const registered = modelRegistry.find("anthropic", "claude-sonnet-4-5");
+		if (!registered) throw new Error("Expected claude-sonnet-4-5 to exist in registry");
+		const model = { ...registered, servedHeaders: { account: "x-served-account" } };
 		session = new AgentSession({
 			agent: new Agent({
 				initialState: {

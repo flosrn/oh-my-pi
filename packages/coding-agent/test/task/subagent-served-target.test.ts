@@ -38,6 +38,11 @@ function turn(served: Partial<AssistantMessage> = {}): AssistantMessage {
 	} as AssistantMessage;
 }
 
+/** A turn whose `upstream*` fields came from the router's declared served headers. */
+function routed(served: Partial<AssistantMessage>): AssistantMessage {
+	return { ...turn(served), upstreamFromHeaders: true } as AssistantMessage;
+}
+
 function recoveryFor(model: Model, sessionId: string): TurnRecovery {
 	return new TurnRecovery({
 		model: () => model,
@@ -53,7 +58,7 @@ describe("served target on the session attribution", () => {
 	it("captures the settled message's served fields", async () => {
 		const recovery = recoveryFor(COMBO, "served-capture");
 		await recovery.onAssistantSettledSuccessfully(
-			turn({
+			routed({
 				upstreamProvider: "cc",
 				upstreamModel: "claude-opus-5-5",
 				upstreamAccount: "alice@example.com",
@@ -71,7 +76,7 @@ describe("served target on the session attribution", () => {
 	it("clears the served target when the next turn is served natively", async () => {
 		const recovery = recoveryFor(COMBO, "served-clear");
 		await recovery.onAssistantSettledSuccessfully(
-			turn({ upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
+			routed({ upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
 		);
 		await recovery.onAssistantSettledSuccessfully(turn());
 		expect(recovery.servingModel?.served).toBeUndefined();
@@ -79,9 +84,16 @@ describe("served target on the session attribution", () => {
 
 	it("keeps the served target of the last productive turn across an empty one", async () => {
 		const recovery = recoveryFor(COMBO, "served-empty");
-		await recovery.onAssistantSettledSuccessfully(turn({ upstreamModel: "gpt-6-sol" }));
+		await recovery.onAssistantSettledSuccessfully(routed({ upstreamModel: "gpt-6-sol" }));
 		await recovery.onAssistantSettledSuccessfully({ ...turn(), content: [] } as AssistantMessage);
 		expect(recovery.servingModel?.served).toEqual({ model: "gpt-6-sol" });
+	});
+
+	it("takes no served target from a turn whose provider declares no served headers", async () => {
+		const recovery = recoveryFor(COMBO, "served-undeclared");
+		// Native Anthropic recovers the served model from the thinking signature.
+		await recovery.onAssistantSettledSuccessfully(turn({ upstreamModel: "claude-opus-4-6" }));
+		expect(recovery.servingModel?.served).toBeUndefined();
 	});
 });
 
@@ -158,8 +170,8 @@ describe("subagent progress carries the served target", () => {
 
 	it("publishes the served target and follows a later turn on another account", async () => {
 		const { snapshots, result } = await runTurns([
-			turn({ upstreamProvider: "cc", upstreamModel: "claude-opus-5-5", upstreamAccount: "alice@example.com" }),
-			turn({ upstreamProvider: "cc", upstreamModel: "claude-opus-5-5", upstreamAccount: "bob@example.com" }),
+			routed({ upstreamProvider: "cc", upstreamModel: "claude-opus-5-5", upstreamAccount: "alice@example.com" }),
+			routed({ upstreamProvider: "cc", upstreamModel: "claude-opus-5-5", upstreamAccount: "bob@example.com" }),
 		]);
 		const accounts = snapshots.map(snapshot => snapshot.served?.account).filter(account => account !== undefined);
 		expect(accounts).toContain("alice@example.com");
@@ -169,7 +181,7 @@ describe("subagent progress carries the served target", () => {
 
 	it("drops the served target once a turn is served natively", async () => {
 		const { snapshots, result } = await runTurns([
-			turn({ upstreamProvider: "cx", upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
+			routed({ upstreamProvider: "cx", upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
 			turn(),
 		]);
 		expect(snapshots.some(snapshot => snapshot.served?.model === "gpt-6-sol")).toBe(true);

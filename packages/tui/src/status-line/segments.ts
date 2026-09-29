@@ -219,14 +219,20 @@ const statusSegment: StatusLineSegment = {
 };
 
 /**
- * Last assistant message when it came from the selected model — the only turn
- * the model segment's served tail describes — else `undefined`. With none, the
- * segment renders no served tail at any `modelServedDrop`.
+ * Last successfully settled assistant turn when it came from the selected
+ * model — the only turn the model segment's served tail describes — else
+ * `undefined`. An errored or aborted turn is skipped, as the Hub skips it, so
+ * it never replaces the target of the turn that actually served. A model
+ * whose provider declares no `servedHeaders` has none: its `upstream*` fields
+ * come from native inference (thinking signatures, OpenRouter, Devin), and
+ * the segment renders exactly as it did before served targets existed.
  */
 export function servedTailTurn(ctx: SegmentContext) {
 	const { model, messages } = ctx.session.state;
-	if (!model || !messages) return undefined;
-	const last = messages.findLast(m => m.role === "assistant");
+	if (!model?.servedHeaders || !messages) return undefined;
+	const last = messages.findLast(
+		m => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+	);
 	if (last?.role !== "assistant" || last.provider !== model.provider || last.model !== model.id) return undefined;
 	return last;
 }
