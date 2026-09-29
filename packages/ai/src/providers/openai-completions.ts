@@ -47,7 +47,7 @@ import {
 	iterateWithTerminalGrace,
 } from "../utils/idle-iterator";
 import { OpenAIHttpError, postOpenAIStream } from "../utils/openai-http";
-import { notifyProviderResponse } from "../utils/provider-response";
+import { captureServedTarget, notifyProviderResponse } from "../utils/provider-response";
 import {
 	adaptSchemaForStrict,
 	findStrictToolSchemaViolation,
@@ -948,6 +948,7 @@ const streamOpenAICompletionsOnce = (
 					// onResponse callback must not abort an already-connected stream.
 					clearTimeout(requestTimeout);
 					await notifyProviderResponse(options, response, model, requestId);
+					captureServedTarget(output, response, model);
 					return events;
 				} finally {
 					// Headers arrived (or the request failed); from here the

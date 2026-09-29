@@ -1159,6 +1159,18 @@ export interface AssistantMessage {
 	 * other than what was requested.
 	 */
 	upstreamModel?: string;
+	/**
+	 * Account (credential identity, e.g. an email) a router used to serve this
+	 * turn, as reported in a response header the provider declares via
+	 * `servedHeaders.account`. Undefined for providers that declare none.
+	 */
+	upstreamAccount?: string;
+	/**
+	 * Number of dispatched attempts that failed inside the router before the
+	 * one that served this turn, as reported in the header declared via
+	 * `servedHeaders.fallbackAttempts`. Undefined when not reported.
+	 */
+	upstreamFallbackAttempts?: number;
 	usage: Usage;
 	stopReason: StopReason;
 	stopDetails?: StopDetails | null;

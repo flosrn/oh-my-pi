@@ -1595,6 +1595,33 @@ export interface Model<TApi extends Api = Api> {
 	 * transport reads it directly and validates it against AWS's limits.
 	 */
 	requestMetadata?: Record<string, string>;
+	/**
+	 * Response headers in which a router names the target that actually served
+	 * the request. Set from `providers.<provider>.servedHeaders`; the
+	 * anthropic-messages, openai-completions and openai-responses transports copy
+	 * each declared header onto the assistant message (`upstreamModel`,
+	 * `upstreamProvider`, `upstreamAccount`, `upstreamFallbackAttempts`).
+	 * Undeclared providers ignore those headers.
+	 */
+	servedHeaders?: ServedHeaders;
+	/**
+	 * Bare model id a router is expected to serve this model with, exactly as
+	 * its served-model header reports it. Lets display surfaces tell a routed
+	 * turn served as intended from one served by a different model.
+	 */
+	expectedUpstreamModel?: string;
+}
+
+/** Header names, per served field, a router uses to report the target that served a request. */
+export interface ServedHeaders {
+	/** Header carrying the served model id. */
+	model?: string;
+	/** Header carrying the served upstream provider. */
+	provider?: string;
+	/** Header carrying the account (credential identity) that served the request. */
+	account?: string;
+	/** Header carrying how many dispatched attempts failed before the serving one. */
+	fallbackAttempts?: string;
 }
 
 /**
