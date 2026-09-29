@@ -145,8 +145,8 @@ describe("served model parts", () => {
 	const codex = { provider: "cx", model: "gpt-6-sol", account: "alice@example.com", fallbackAttempts: 1 };
 
 	it("resolves the account alias and provider label at render time", () => {
-		expect(servedModelParts("omniroute/task", codex, aliases)).toEqual({
-			requested: "omniroute/task",
+		expect(servedModelParts("router/task", codex, aliases)).toEqual({
+			requested: "router/task",
 			servedProvider: "cx",
 			servedModel: "gpt-6-sol",
 			alias: "a",
@@ -188,7 +188,7 @@ describe("feed model badges with a served target", () => {
 	it("drops the requested provider prefix when the full form exceeds the badge budget", () => {
 		const glyph = uiTheme.thinking.medium.split(" ")[0];
 		const badge = formatFeedModelBadge(
-			servedModelParts("omniroute/task", codex, aliases),
+			servedModelParts("modelrouter/task", codex, aliases),
 			ThinkingLevel.Medium,
 			false,
 			uiTheme,
@@ -199,8 +199,8 @@ describe("feed model badges with a served target", () => {
 	});
 
 	it("keeps the requested provider when the full form fits", () => {
-		const badge = formatFeedModelBadge(servedModelParts("omniroute/task", codex, aliases), undefined, false, uiTheme);
-		expect(Bun.stripANSI(badge)).toBe("omniroute/task→cx/gpt-6-sol·a");
+		const badge = formatFeedModelBadge(servedModelParts("router/task", codex, aliases), undefined, false, uiTheme);
+		expect(Bun.stripANSI(badge)).toBe("router/task→cx/gpt-6-sol·a");
 	});
 
 	it("renders no separator for an absent account and no arrow for an absent model", () => {
@@ -227,7 +227,7 @@ describe("feed model badges with a served target", () => {
 	});
 
 	it("shrinks the requested id, then the served model, and never cuts the alias", () => {
-		const requested = "omniroute/some-very-long-requested-model-id";
+		const requested = "router/some-very-long-requested-model-id";
 		const glyph = uiTheme.thinking.medium.split(" ")[0];
 		const shortServed = formatFeedModelBadge(
 			servedModelParts(requested, codex, aliases),
@@ -255,19 +255,13 @@ describe("feed model badges with a served target", () => {
 	it("renders byte-identically to a plain identity when nothing was served", () => {
 		for (const width of [30, 12, 4]) {
 			expect(
-				formatFeedModelBadge(
-					servedModelParts("omniroute/task", undefined),
-					ThinkingLevel.High,
-					true,
-					uiTheme,
-					width,
-				),
-			).toBe(formatFeedModelBadge("omniroute/task", ThinkingLevel.High, true, uiTheme, width));
+				formatFeedModelBadge(servedModelParts("router/task", undefined), ThinkingLevel.High, true, uiTheme, width),
+			).toBe(formatFeedModelBadge("router/task", ThinkingLevel.High, true, uiTheme, width));
 		}
 	});
 
 	it("stays within tiny budgets", () => {
-		const parts = servedModelParts("omniroute/task", codex, aliases);
+		const parts = servedModelParts("router/task", codex, aliases);
 		for (let width = 0; width <= 12; width++) {
 			expect(
 				Bun.stringWidth(formatFeedModelBadge(parts, ThinkingLevel.High, true, uiTheme, width)),
