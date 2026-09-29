@@ -13,6 +13,7 @@ import { expandWindowsLongPath, getWindowsShortPath } from "@oh-my-pi/pi-natives
 import { pluralize, sanitizeText } from "@oh-my-pi/pi-utils";
 import { formatKeyHint, type KeyId } from "../app-keybindings";
 import { getKeybindings } from "../keybindings";
+import type { ServedTarget } from "../overlays/agent-hub-types";
 import type { Theme } from "../theme/theme";
 import type { Component } from "../tui";
 import { replaceTabs, sliceByColumn, truncateToWidth, visibleWidth } from "../utils";
@@ -149,20 +150,99 @@ export function thinkingLevelGlyph(level: ConfiguredThinkingLevel, uiTheme: Them
 	return space < 0 ? symbol : symbol.slice(0, space);
 }
 
+/** Config maps that turn a router's served-target values into display labels. */
+export interface ModelDisplayAliases {
+	/** Account email → short alias. */
+	accountAliases?: Readonly<Record<string, string>>;
+	/** Router-reported provider value → display label. */
+	providerAliases?: Readonly<Record<string, string>>;
+}
+
+let modelDisplayAliases: ModelDisplayAliases = {};
+
+/** Set the alias maps feed rows and the agent hub resolve served targets with. */
+export function setModelDisplayAliases(aliases: ModelDisplayAliases): void {
+	modelDisplayAliases = aliases;
+}
+
+/**
+ * Display parts for a requested model and the target a router reported serving
+ * it. Every part is sanitized; each surface composes them under its own rule.
+ */
+export interface ServedModelParts {
+	/** Requested model identity. */
+	requested?: string;
+	/** Served provider label; set only alongside {@link servedModel}. */
+	servedProvider?: string;
+	/** Served model id, as the router reported it. */
+	servedModel?: string;
+	/** Serving account alias: its mapped alias, else the email's local part. */
+	alias?: string;
+	/** Dispatched attempts that failed before the serving one; set only when positive. */
+	hops?: number;
+}
+
+function cleanLabel(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	return sanitizeText(value).replace(/\s+/g, " ").trim() || undefined;
+}
+
+function mappedLabel(map: Readonly<Record<string, string>> | undefined, key: string): string | undefined {
+	return map && Object.hasOwn(map, key) ? cleanLabel(map[key]) : undefined;
+}
+
+/**
+ * Split a requested model and its served target into display parts, resolving
+ * aliases now so alias-map edits apply to past turns. Without a served model
+ * there is no served provider; an unmapped account shows its local part.
+ */
+export function servedModelParts(
+	requested: string | undefined,
+	served: ServedTarget | undefined,
+	aliases: ModelDisplayAliases = modelDisplayAliases,
+): ServedModelParts {
+	const parts: ServedModelParts = {};
+	const cleanRequested = cleanLabel(requested);
+	if (cleanRequested) parts.requested = cleanRequested;
+	const servedModel = cleanLabel(served?.model);
+	if (servedModel) {
+		const provider = typeof served?.provider === "string" ? served.provider : undefined;
+		const servedProvider = provider && (mappedLabel(aliases.providerAliases, provider) ?? cleanLabel(provider));
+		if (servedProvider) parts.servedProvider = servedProvider;
+		parts.servedModel = servedModel;
+	}
+	const account = typeof served?.account === "string" ? served.account : undefined;
+	if (account) {
+		const at = account.indexOf("@");
+		const alias = mappedLabel(aliases.accountAliases, account) ?? cleanLabel(at > 0 ? account.slice(0, at) : account);
+		if (alias) parts.alias = alias;
+	}
+	const hops = served?.fallbackAttempts;
+	if (typeof hops === "number" && Number.isInteger(hops) && hops > 0) parts.hops = hops;
+	return parts;
+}
+
+/** Narrowest a requested id or served model is middle-truncated to before the badge gives up on the served target. */
+const FEED_SERVED_MIN_LABEL_WIDTH = 4;
+
 /**
  * Compact feed-row prefix: explicit thinking glyph, sanitized model identity,
  * then advisor eye. Keep fitting icons if no model fits; preserve literal identity suffixes.
+ *
+ * With served parts the identity reads `requested→provider/model·alias`. When
+ * it overflows, the requested `provider/` prefix goes first, then the requested
+ * id and then the served model are middle-truncated; the alias is never cut.
  */
 export function formatFeedModelBadge(
-	modelIdentity: string | undefined,
+	model: string | ServedModelParts | undefined,
 	thinkingLevel: ConfiguredThinkingLevel | undefined,
 	advisor: boolean | undefined,
 	uiTheme: Theme,
 	maxWidth = FEED_MODEL_BADGE_WIDTH,
 ): string {
-	if (!modelIdentity) return "";
+	const parts = typeof model === "string" ? { requested: cleanLabel(model) } : model;
+	const clean = parts?.requested;
 	const width = Math.max(0, Math.floor(maxWidth));
-	const clean = sanitizeText(modelIdentity).replace(/\s+/g, " ").trim();
 	if (!clean || !(width > 0)) return "";
 	const glyph = thinkingLevel !== undefined ? thinkingLevelGlyph(thinkingLevel, uiTheme) : "";
 	const advisorIcon = advisor === true ? uiTheme.icon.advisor : "";
@@ -177,8 +257,42 @@ export function formatFeedModelBadge(
 		}
 		return glyph && visibleWidth(glyph) <= width ? uiTheme.fg("accent", glyph) : "";
 	}
-	const model = truncateMiddleToWidth(clean, modelWidth);
-	return uiTheme.fg("accent", prefix) + uiTheme.fg("dim", `${model}${suffix}`);
+	const served = parts.servedModel || parts.alias ? fitServedFeedModel(parts, clean, modelWidth, uiTheme) : undefined;
+	if (served) return uiTheme.fg("accent", prefix) + served + (suffix ? uiTheme.fg("dim", suffix) : "");
+	const identity = truncateMiddleToWidth(clean, modelWidth);
+	return uiTheme.fg("accent", prefix) + uiTheme.fg("dim", `${identity}${suffix}`);
+}
+
+/** Styled `requested→provider/model·alias` fitted to `budget`, or undefined when even its shrunk form cannot fit. */
+function fitServedFeedModel(
+	parts: ServedModelParts,
+	requested: string,
+	budget: number,
+	uiTheme: Theme,
+): string | undefined {
+	const servedModel = parts.servedModel ?? "";
+	// `→provider/` ahead of the served model; empty when no model was reported.
+	const targetLead = servedModel
+		? `${uiTheme.icon.served}${parts.servedProvider ? `${parts.servedProvider}/` : ""}`
+		: "";
+	const dot = uiTheme.sep.dot.trim();
+	const aliasTail = parts.alias ? uiTheme.fg("dim", dot) + uiTheme.fg("accent", parts.alias) : "";
+	const compose = (req: string, model: string): string =>
+		uiTheme.fg("dim", servedModel ? `${req}${targetLead}${model}` : req) + aliasTail;
+	const aliasWidth = visibleWidth(aliasTail);
+	const servedWidth = servedModel ? visibleWidth(targetLead) + visibleWidth(servedModel) : 0;
+
+	if (visibleWidth(requested) + servedWidth + aliasWidth <= budget) return compose(requested, servedModel);
+	const bare = requested.slice(requested.indexOf("/") + 1) || requested;
+	const requestedBudget = budget - servedWidth - aliasWidth;
+	if (requestedBudget >= Math.min(FEED_SERVED_MIN_LABEL_WIDTH, visibleWidth(bare))) {
+		return compose(truncateMiddleToWidth(bare, requestedBudget), servedModel);
+	}
+	if (!servedModel) return undefined;
+	const shortRequested = truncateMiddleToWidth(bare, FEED_SERVED_MIN_LABEL_WIDTH);
+	const modelBudget = budget - visibleWidth(shortRequested) - visibleWidth(targetLead) - aliasWidth;
+	if (modelBudget < Math.min(FEED_SERVED_MIN_LABEL_WIDTH, visibleWidth(servedModel))) return undefined;
+	return compose(shortRequested, truncateMiddleToWidth(servedModel, modelBudget));
 }
 
 /** Truncation lengths for different content types */

@@ -121,6 +121,8 @@ function isStatusLineSettings(value: unknown): value is StatusLineSettings {
 		isSegmentList(value.rightSegments) &&
 		(value.separator === undefined || isOneOf(STATUS_LINE_SEPARATOR_VALUES, value.separator)) &&
 		(value.segmentOptions === undefined || isRecord(value.segmentOptions)) &&
+		(value.accountAliases === undefined || isRecord(value.accountAliases)) &&
+		(value.providerAliases === undefined || isRecord(value.providerAliases)) &&
 		(value.contextLine === undefined || isOneOf(CONTEXT_LINE_MODE_VALUES, value.contextLine)) &&
 		isOptionalBoolean(value.showHookStatus) &&
 		isOptionalBoolean(value.sessionAccent) &&

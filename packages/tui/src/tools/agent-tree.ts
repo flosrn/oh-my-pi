@@ -7,9 +7,11 @@ import {
 	formatNumber,
 	formatStatusIcon,
 	isFeedModelBadgeEnabled,
+	servedModelParts,
 	truncateToWidth,
 	type ConfiguredThinkingLevel,
 } from "../render/render-utils";
+import type { ServedTarget } from "../overlays/agent-hub-types";
 import type { Theme } from "../theme/theme";
 import { visibleWidth } from "../utils";
 
@@ -51,6 +53,8 @@ export interface AgentTreeRowOptions {
 	id: string;
 	width: number;
 	model?: string;
+	/** Router-reported target that served `model`, appended as `→provider/model·alias`. */
+	served?: ServedTarget;
 	thinkingLevel?: ConfiguredThinkingLevel;
 	advisor?: boolean;
 	spinnerFrame?: number;
@@ -101,7 +105,7 @@ export function renderAgentTreeRow(
 	const model =
 		isFeedModelBadgeEnabled() && (task || options.model)
 			? formatFeedModelBadge(
-					options.model,
+					servedModelParts(options.model, options.served),
 					options.thinkingLevel,
 					options.advisor,
 					theme,

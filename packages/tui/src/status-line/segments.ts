@@ -11,7 +11,7 @@ import {
 	relativePathWithinNormalizedRoot,
 } from "@oh-my-pi/pi-utils";
 import { type SymbolKey, type Theme, type ThemeColor, theme } from "../theme";
-import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import { servedModelParts, shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
 import { fileHyperlink } from "../render/hyperlink";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../theme/session-color";
 import { summarizeLoopCondition } from "./loop";
@@ -218,6 +218,41 @@ const statusSegment: StatusLineSegment = {
 	},
 };
 
+/**
+ * Served-target tail of the model segment, shown only while the last assistant
+ * turn came from the selected model, so a card switch renders exactly as before
+ * until the new card answers: ` → provider/model` unless the router served the
+ * card's declared `expectedUpstreamModel`, then ` · alias` and ` ↻N`.
+ */
+function servedModelTail(ctx: SegmentContext): string {
+	const { model, messages } = ctx.session.state;
+	const drop = ctx.modelServedDrop ?? 0;
+	if (!model || !messages || drop >= 3) return "";
+	let last: (typeof messages)[number] | undefined;
+	for (let i = messages.length - 1; i >= 0 && !last; i--) {
+		if (messages[i].role === "assistant") last = messages[i];
+	}
+	if (last?.role !== "assistant" || last.provider !== model.provider || last.model !== model.id) return "";
+	const parts = servedModelParts(
+		undefined,
+		{
+			provider: last.upstreamProvider,
+			model: last.upstreamModel,
+			account: last.upstreamAccount,
+			fallbackAttempts: last.upstreamFallbackAttempts,
+		},
+		ctx.modelDisplayAliases ?? {},
+	);
+	let tail = "";
+	if (drop < 1 && parts.servedModel && last.upstreamModel !== model.expectedUpstreamModel) {
+		const target = parts.servedProvider ? `${parts.servedProvider}/${parts.servedModel}` : parts.servedModel;
+		tail += accentFg(ctx, "statusLineModel", ` ${theme.icon.served} ${target}`);
+	}
+	if (parts.alias) tail += accentFg(ctx, "statusLineModel", theme.sep.dot) + accentFg(ctx, "accent", parts.alias);
+	if (drop < 2 && parts.hops) tail += theme.fg("warning", ` ${theme.icon.servedHops}${parts.hops}`);
+	return tail;
+}
+
 const modelSegment: StatusLineSegment = {
 	id: "model",
 	render(ctx) {
@@ -295,6 +330,7 @@ const modelSegment: StatusLineSegment = {
 		if (tail) {
 			content += accentFg(ctx, "statusLineModel", tail);
 		}
+		content += servedModelTail(ctx);
 
 		// Anthropic usage-limit stage (wrap-up allowance or low priority): a
 		// warning-colored badge so past-the-limit service is never mistaken for normal.

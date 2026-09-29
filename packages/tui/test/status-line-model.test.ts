@@ -1,8 +1,9 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { SegmentContext } from "../src/status-line/segments";
 import { renderSegment } from "../src/status-line/segments";
 import { initTheme, theme } from "../src/theme";
+import { setSymbolPreset } from "../src/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();
@@ -171,5 +172,189 @@ describe("status line model segment compact thinking level", () => {
 		const rendered = renderSegment("model", createThinkingContext(true));
 		expect(Bun.stripANSI(rendered.content)).toBe(`${glyph} Test Model`);
 		expect(Bun.stripANSI(rendered.content)).not.toContain(theme.sep.dot);
+	});
+});
+
+describe("status line model segment served target", () => {
+	const aliases = { accountAliases: { "alice@example.com": "a" } };
+	const handle = {
+		id: "opus-5.5",
+		name: "Opus 5.5",
+		provider: "router",
+		thinking: true,
+		expectedUpstreamModel: "claude-opus-5-5",
+	};
+	const pool = { id: "task", name: "Task", provider: "router", thinking: true };
+
+	function assistant(model: { id: string; provider: string }, served: Record<string, unknown>) {
+		return { role: "assistant", provider: model.provider, model: model.id, content: [], ...served };
+	}
+
+	function createServedContext(
+		model: Record<string, unknown>,
+		messages: unknown[],
+		overrides: Partial<SegmentContext> = {},
+		slowModeLabel?: string,
+	): SegmentContext {
+		return {
+			...createModelContext(false),
+			modelDisplayAliases: aliases,
+			...overrides,
+			session: {
+				state: { model, thinkingLevel: ThinkingLevel.Medium, messages },
+				isFastModeActive: () => false,
+				isAutoThinking: false,
+				autoResolvedThinkingLevel: () => undefined,
+				isAdvisorActive: () => false,
+				getAdvisorStatusOverview: () => ({ configured: false, advisors: [] }),
+				getAnthropicSlowModeLabel: () => slowModeLabel,
+			} as unknown as SegmentContext["session"],
+		};
+	}
+
+	const plain = (ctx: SegmentContext) => Bun.stripANSI(renderSegment("model", ctx).content);
+
+	it("shows only the alias when a handle card is served its expected model", () => {
+		const base = plain(createServedContext(handle, []));
+		const ctx = createServedContext(handle, [
+			assistant(handle, {
+				upstreamProvider: "cc",
+				upstreamModel: "claude-opus-5-5",
+				upstreamAccount: "alice@example.com",
+			}),
+		]);
+		expect(plain(ctx)).toBe(`${base}${theme.sep.dot}a`);
+		expect(renderSegment("model", ctx).content).toContain(theme.fg("accent", "a"));
+	});
+
+	it("shows the served target, alias and hops for a pool card, before the slow-mode label", () => {
+		const messages = [
+			assistant(pool, {
+				upstreamProvider: "cx",
+				upstreamModel: "gpt-6-sol",
+				upstreamAccount: "alice@example.com",
+				upstreamFallbackAttempts: 1,
+			}),
+		];
+		const base = plain(createServedContext(pool, []));
+		expect(plain(createServedContext(pool, messages))).toBe(`${base} → cx/gpt-6-sol${theme.sep.dot}a ↻1`);
+		const rendered = renderSegment("model", createServedContext(pool, messages, {}, "wrap-up")).content;
+		expect(rendered).toContain(theme.fg("warning", " ↻1"));
+		expect(Bun.stripANSI(rendered)).toBe(`${base} → cx/gpt-6-sol${theme.sep.dot}a ↻1${theme.sep.dot}wrap-up`);
+	});
+
+	it("marks router retries on a handle card and omits the marker at zero", () => {
+		const base = plain(createServedContext(handle, []));
+		const served = { upstreamModel: "claude-opus-5-5", upstreamAccount: "alice@example.com" };
+		expect(plain(createServedContext(handle, [assistant(handle, { ...served, upstreamFallbackAttempts: 1 })]))).toBe(
+			`${base}${theme.sep.dot}a ↻1`,
+		);
+		expect(plain(createServedContext(handle, [assistant(handle, { ...served, upstreamFallbackAttempts: 0 })]))).toBe(
+			`${base}${theme.sep.dot}a`,
+		);
+	});
+
+	it("shows a misrouted handle's served model", () => {
+		const base = plain(createServedContext(handle, []));
+		const ctx = createServedContext(handle, [
+			assistant(handle, {
+				upstreamProvider: "cc",
+				upstreamModel: "claude-sonnet-5",
+				upstreamAccount: "alice@example.com",
+			}),
+		]);
+		expect(plain(ctx)).toBe(`${base} → cc/claude-sonnet-5${theme.sep.dot}a`);
+	});
+
+	it("renders the new card exactly as before after a model switch", () => {
+		const base = plain(createServedContext(pool, []));
+		const ctx = createServedContext(pool, [
+			assistant(handle, { upstreamModel: "claude-opus-5-5", upstreamAccount: "alice@example.com" }),
+		]);
+		expect(renderSegment("model", ctx).content).toBe(renderSegment("model", createServedContext(pool, [])).content);
+		expect(plain(ctx)).toBe(base);
+	});
+
+	it("renders the local part of an unmapped account", () => {
+		const base = plain(createServedContext(handle, []));
+		const ctx = createServedContext(handle, [
+			assistant(handle, { upstreamModel: "claude-opus-5-5", upstreamAccount: "first.last@example.com" }),
+		]);
+		expect(plain(ctx)).toBe(`${base}${theme.sep.dot}first.last`);
+	});
+
+	it("omits absent parts without dangling separators", () => {
+		const base = plain(createServedContext(pool, []));
+		expect(
+			plain(createServedContext(pool, [assistant(pool, { upstreamProvider: "cx", upstreamModel: "gpt-6-sol" })])),
+		).toBe(`${base} → cx/gpt-6-sol`);
+		expect(plain(createServedContext(pool, [assistant(pool, { upstreamModel: "gpt-6-sol" })]))).toBe(
+			`${base} → gpt-6-sol`,
+		);
+		expect(
+			plain(
+				createServedContext(pool, [
+					assistant(pool, { upstreamProvider: "cx", upstreamAccount: "alice@example.com" }),
+				]),
+			),
+		).toBe(`${base}${theme.sep.dot}a`);
+	});
+
+	it("renders byte-identically when the last turn carries no served fields", () => {
+		const native = { id: "grok-4.7", name: "Grok 4.7", provider: "xai-oauth", thinking: true };
+		const ctx = createServedContext(native, [assistant(native, {})]);
+		expect(renderSegment("model", ctx).content).toBe(renderSegment("model", createServedContext(native, [])).content);
+	});
+
+	it("drops the arrow first, then hops, and the alias last", () => {
+		const messages = [
+			assistant(pool, {
+				upstreamProvider: "cx",
+				upstreamModel: "gpt-6-sol",
+				upstreamAccount: "alice@example.com",
+				upstreamFallbackAttempts: 2,
+			}),
+		];
+		const base = plain(createServedContext(pool, []));
+		const at = (modelServedDrop: number) => plain(createServedContext(pool, messages, { modelServedDrop }));
+		expect(at(1)).toBe(`${base}${theme.sep.dot}a ↻2`);
+		expect(at(2)).toBe(`${base}${theme.sep.dot}a`);
+		expect(at(3)).toBe(base);
+	});
+});
+
+describe("status line served markers under the ASCII symbol preset", () => {
+	afterAll(async () => {
+		await setSymbolPreset("unicode");
+	});
+
+	it("renders the served arrow and hop marker as ASCII fallbacks", async () => {
+		await setSymbolPreset("ascii");
+		const model = { id: "task", name: "Task", provider: "router" };
+		const ctx: SegmentContext = {
+			...createModelContext(false),
+			modelDisplayAliases: { accountAliases: { "alice@example.com": "a" } },
+			session: {
+				state: {
+					model,
+					messages: [
+						{
+							role: "assistant",
+							provider: "router",
+							model: "task",
+							upstreamProvider: "cx",
+							upstreamModel: "gpt-6-sol",
+							upstreamAccount: "alice@example.com",
+							upstreamFallbackAttempts: 1,
+						},
+					],
+				},
+				isFastModeActive: () => false,
+				isAutoThinking: false,
+				autoResolvedThinkingLevel: () => undefined,
+				getAdvisorStatusOverview: () => ({ configured: false, advisors: [] }),
+			} as unknown as SegmentContext["session"],
+		};
+		expect(Bun.stripANSI(renderSegment("model", ctx).content)).toEndWith(` -> cx/gpt-6-sol${theme.sep.dot}a x1`);
 	});
 });

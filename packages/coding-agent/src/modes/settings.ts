@@ -15,11 +15,16 @@ import { setEditorGapComposerShape } from "@oh-my-pi/pi-tui/prompt/editor-top-ga
 import { setEmojiAutocompleteEnabled } from "@oh-my-pi/pi-tui/prompt/prompt-action-autocomplete";
 import { WORD_COMPLETION_METHODS } from "@oh-my-pi/pi-tui/prompt/word-completion";
 import { applyHyperlinkSetting } from "@oh-my-pi/pi-tui/render/hyperlink";
-import { setInlineImageMaxColumns, setInlineImageMaxRows } from "@oh-my-pi/pi-tui/render/render-utils";
+import {
+	setInlineImageMaxColumns,
+	setInlineImageMaxRows,
+	setModelDisplayAliases,
+} from "@oh-my-pi/pi-tui/render/render-utils";
 import { setShimmerMode } from "@oh-my-pi/pi-tui/theme/shimmer";
 import { setAutoThemeMapping, setColorBlindMode, setSymbolPreset } from "@oh-my-pi/pi-tui/theme/theme";
 
 const EMPTY_UNKNOWN_RECORD: Record<string, unknown> = {};
+const EMPTY_STRING_RECORD: Record<string, string> = {};
 
 // ────────────────────────────────────────────────────────────────────────
 // General settings (no UI)
@@ -292,6 +297,25 @@ export const cfgStatusLineSegmentOptions = register({
 	type: "record",
 	default: EMPTY_UNKNOWN_RECORD,
 });
+
+// Served-target labels: a router reports the account (an email) and provider
+// that served each turn; these maps shorten them wherever that target renders.
+export const cfgModelDisplayAccountAliases = register({
+	id: "modelDisplay.accountAliases",
+	type: "record",
+	default: EMPTY_STRING_RECORD,
+});
+
+export const cfgModelDisplayProviderAliases = register({
+	id: "modelDisplay.providerAliases",
+	type: "record",
+	default: EMPTY_STRING_RECORD,
+});
+
+effect(
+	combine({ accountAliases: cfgModelDisplayAccountAliases, providerAliases: cfgModelDisplayProviderAliases }),
+	setModelDisplayAliases,
+);
 
 // Images and terminal
 export const cfgTerminalShowImages = register({

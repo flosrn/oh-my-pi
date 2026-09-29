@@ -5,9 +5,9 @@ import { renderProgressBar } from "../components/progress-bar";
 import { renderTableRow } from "../components/table";
 import { formatDuration, formatNumber } from "@oh-my-pi/pi-utils";
 import type { ThemeColor } from "../theme/theme";
-import { type AgentRecordLike, MAIN_AGENT_ID } from "./agent-hub-types";
+import { type AgentRecordLike, MAIN_AGENT_ID, type ServedTarget } from "./agent-hub-types";
 import { parseThinkingLevel } from "../thinking";
-import { TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import { servedModelParts, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
 import { sanitizeDisplaySingleLine } from "./extensions/display-text";
 import type { ObservableSession } from "./session-observer-registry";
 import { theme } from "../theme/theme";
@@ -64,9 +64,18 @@ export function statusText(status: AgentRecordLike["status"], text: string): str
 	}
 }
 
-/** Model id + thinking level (`sonnet-4-6 ◒ high`), level colored per theme. */
-function formatModelBadge(modelId: string, level: ThinkingLevel | undefined): string {
-	const model = theme.fg("muted", sanitizeDisplaySingleLine(modelId));
+/**
+ * Model id + thinking level (`sonnet-4-6 ◒ high`), level colored per theme. A
+ * served target reads after the model: `task → cx/gpt-6-sol · alias ◒ high`.
+ */
+function formatModelBadge(modelId: string, level: ThinkingLevel | undefined, served?: ServedTarget): string {
+	let model = theme.fg("muted", sanitizeDisplaySingleLine(modelId));
+	const parts = servedModelParts(undefined, served);
+	if (parts.servedModel) {
+		const target = parts.servedProvider ? `${parts.servedProvider}/${parts.servedModel}` : parts.servedModel;
+		model += theme.fg("muted", ` ${theme.icon.served} ${target}`);
+	}
+	if (parts.alias) model += theme.fg("muted", theme.sep.dot) + theme.fg("accent", parts.alias);
 	if (!level || level === ThinkingLevel.Off || level === ThinkingLevel.Inherit) return model;
 	const display = theme.thinking[level] ?? level;
 	return `${model} ${theme.getThinkingBorderColor(level)(display)}`;
@@ -85,7 +94,12 @@ export function formatRoleBadge(role: string, info: AgentRoleDisplay): string {
 }
 
 /** Format a resolved selector, preserving provider identity when requested. */
-function formatResolvedModelBadge(resolved: string, preserveProvider = false, fallbackLevel?: ThinkingLevel): string {
+function formatResolvedModelBadge(
+	resolved: string,
+	preserveProvider = false,
+	fallbackLevel?: ThinkingLevel,
+	served?: ServedTarget,
+): string {
 	const cleanResolved = sanitizeDisplaySingleLine(resolved);
 	// Model ids may themselves contain colons (`qwen3:14b`), so only treat the
 	// suffix as a thinking level when it parses as one.
@@ -93,7 +107,7 @@ function formatResolvedModelBadge(resolved: string, preserveProvider = false, fa
 	const explicitLevel = colon >= 0 ? parseThinkingLevel(cleanResolved.slice(colon + 1)) : undefined;
 	const selector = explicitLevel !== undefined ? cleanResolved.slice(0, colon) : cleanResolved;
 	const label = preserveProvider ? selector : selector.slice(selector.indexOf("/") + 1);
-	return formatModelBadge(label, explicitLevel ?? fallbackLevel);
+	return formatModelBadge(label, explicitLevel ?? fallbackLevel, served);
 }
 
 /**
@@ -104,7 +118,9 @@ function formatResolvedModelBadge(resolved: string, preserveProvider = false, fa
  *
  * Every source reports the model that produced the row's work, never the one
  * the session merely points at: an armed fallback that has not served yet stays
- * attributed to whichever model last actually spoke.
+ * attributed to whichever model last actually spoke. A router-reported served
+ * target is read from the same source as the resolved model and follows it;
+ * the retry-chain `fallback →` form never carries one.
  */
 export function modelBadge(ref: AgentRecordLike, observed: ObservableSession | undefined): string | undefined {
 	const progress = observed?.progress;
@@ -117,8 +133,15 @@ export function modelBadge(ref: AgentRecordLike, observed: ObservableSession | u
 	if (fallbackSelector) {
 		return `${theme.fg("warning", "fallback →")} ${formatResolvedModelBadge(fallbackSelector, true, liveThinkingLevel)}`;
 	}
-	const resolvedModel = progress?.resolvedModel ?? ref.history?.resolvedModel ?? serving?.selector;
-	if (resolvedModel) return formatResolvedModelBadge(resolvedModel, false, liveThinkingLevel);
+	const source =
+		progress?.resolvedModel != null
+			? progress
+			: ref.history?.resolvedModel != null
+				? ref.history
+				: serving && { resolvedModel: serving.selector, served: serving.served };
+	if (source?.resolvedModel) {
+		return formatResolvedModelBadge(source.resolvedModel, false, liveThinkingLevel, source.served);
+	}
 	const model = ref.session?.model;
 	if (!model) return undefined;
 	const level = model.thinking ? liveThinkingLevel : undefined;
