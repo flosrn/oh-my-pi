@@ -70,7 +70,9 @@ describe("served target on the session attribution", () => {
 
 	it("clears the served target when the next turn is served natively", async () => {
 		const recovery = recoveryFor(COMBO, "served-clear");
-		await recovery.onAssistantSettledSuccessfully(turn({ upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }));
+		await recovery.onAssistantSettledSuccessfully(
+			turn({ upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
+		);
 		await recovery.onAssistantSettledSuccessfully(turn());
 		expect(recovery.servingModel?.served).toBeUndefined();
 	});

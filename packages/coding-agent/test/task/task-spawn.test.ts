@@ -641,7 +641,11 @@ describe("task spawn routing", () => {
 		const manager = createManager();
 		const session = createSession({ manager });
 		const tool = await TaskTool.create(session);
-		const result = await tool.execute("tc-served-drop", { agent: "task", name: "Dropped", task: "work" } as TaskParams);
+		const result = await tool.execute("tc-served-drop", {
+			agent: "task",
+			name: "Dropped",
+			task: "work",
+		} as TaskParams);
 		const job = manager.getJob(result.details!.async!.jobId)!;
 		try {
 			await pollUntil(() => getJobProgress(job)?.served?.account === "alice@example.com");
