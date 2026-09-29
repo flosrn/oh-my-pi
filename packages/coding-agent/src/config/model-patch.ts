@@ -24,6 +24,7 @@ export interface ProviderOverride {
 	guardrailVersion?: Model<Api>["guardrailVersion"];
 	guardrailTrace?: Model<Api>["guardrailTrace"];
 	requestMetadata?: Model<Api>["requestMetadata"];
+	servedHeaders?: Model<Api>["servedHeaders"];
 }
 
 /**
@@ -253,6 +254,7 @@ export interface ModelPatch {
 	compat?: ModelSpec<Api>["compat"];
 	contextPromotionTarget?: string;
 	compactionModel?: string;
+	expectedUpstreamModel?: string;
 	remoteCompaction?: RemoteCompactionConfig<Api>;
 	premiumMultiplier?: number;
 }
@@ -281,6 +283,7 @@ export function applyModelPatch(base: Model<Api>, patch: ModelPatch, transport: 
 	if (patch.preferWebsockets !== undefined) result.preferWebsockets = patch.preferWebsockets;
 	if (patch.contextPromotionTarget !== undefined) result.contextPromotionTarget = patch.contextPromotionTarget;
 	if (patch.compactionModel !== undefined) result.compactionModel = patch.compactionModel;
+	if (patch.expectedUpstreamModel !== undefined) result.expectedUpstreamModel = patch.expectedUpstreamModel;
 	if (patch.remoteCompaction !== undefined) {
 		result.remoteCompaction = mergeRemoteCompactionConfig(base.remoteCompaction, patch.remoteCompaction);
 	}

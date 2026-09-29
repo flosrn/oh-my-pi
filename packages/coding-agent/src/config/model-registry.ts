@@ -157,16 +157,18 @@ const ADDITIVE_MODELS_DEV_CATALOG_PROVIDER_ID_LOOKUP: Readonly<Record<string, tr
 );
 
 /**
- * Bedrock provider-scoped fields to spread onto a model spec, dropping keys
- * that a provider override left unset so an override never clobbers an
- * existing value with `undefined`.
+ * Provider-scoped model fields (Bedrock guardrails/tags, served headers) to
+ * spread onto every model spec of the provider, dropping keys that a provider
+ * override left unset so an override never clobbers an existing value with
+ * `undefined`.
  */
-function bedrockProviderFields(override: ProviderOverride): Partial<ModelSpec<Api>> {
+function providerScopedFields(override: ProviderOverride): Partial<ModelSpec<Api>> {
 	const fields: Partial<ModelSpec<Api>> = {};
 	if (override.guardrailIdentifier !== undefined) fields.guardrailIdentifier = override.guardrailIdentifier;
 	if (override.guardrailVersion !== undefined) fields.guardrailVersion = override.guardrailVersion;
 	if (override.guardrailTrace !== undefined) fields.guardrailTrace = override.guardrailTrace;
 	if (override.requestMetadata !== undefined) fields.requestMetadata = override.requestMetadata;
+	if (override.servedHeaders !== undefined) fields.servedHeaders = override.servedHeaders;
 	return fields;
 }
 
@@ -1050,8 +1052,8 @@ export class ModelRegistry {
 		const withConfigModels = this.#mergeCustomModels(resolvedDefaults, select(this.#customModelOverlays));
 		const combined = this.#mergeCustomModels(withConfigModels, select(this.#runtimeModelOverlays));
 		const withModelOverrides = this.#applyModelOverrides(collapseBuiltVariants(combined), this.#modelOverrides);
-		const withProviderBedrock = this.#applyProviderBedrockOverrides(withModelOverrides);
-		return this.#applyDiscoveryPolicies(this.#applyRuntimeProviderOverrides(withProviderBedrock));
+		const withProviderScoped = this.#applyProviderScopedOverrides(withModelOverrides);
+		return this.#applyDiscoveryPolicies(this.#applyRuntimeProviderOverrides(withProviderScoped));
 	}
 
 	#composeStaticModels(providerFilter?: ReadonlySet<string>): Model<Api>[] {
@@ -1562,7 +1564,7 @@ export class ModelRegistry {
 				baseUrlApis.add(providerConfig.api);
 			}
 			const baseUrlScope = baseUrlApis.size > 0 ? [...baseUrlApis] : undefined;
-			// Always set overrides when baseUrl/headers/apiKey/authHeader/compat/disableStrictTools/guardrail*/transport are present
+			// Always set overrides when baseUrl/headers/apiKey/authHeader/compat/disableStrictTools/guardrail*/requestMetadata/servedHeaders/transport are present
 			if (
 				providerConfig.baseUrl ||
 				providerConfig.headers ||
@@ -1572,6 +1574,7 @@ export class ModelRegistry {
 				providerConfig.disableStrictTools ||
 				providerConfig.guardrailIdentifier ||
 				providerConfig.requestMetadata ||
+				providerConfig.servedHeaders ||
 				providerConfig.remoteCompaction ||
 				providerConfig.transport
 			) {
@@ -1595,6 +1598,7 @@ export class ModelRegistry {
 					guardrailVersion: providerConfig.guardrailVersion,
 					guardrailTrace: providerConfig.guardrailTrace,
 					requestMetadata: providerConfig.requestMetadata,
+					servedHeaders: providerConfig.servedHeaders,
 				});
 			}
 
@@ -1755,8 +1759,8 @@ export class ModelRegistry {
 		const withConfigModels = this.#mergeCustomModels(resolved, this.#customModelOverlays);
 		const combined = this.#mergeCustomModels(withConfigModels, this.#runtimeModelOverlays);
 		const withModelOverrides = this.#applyModelOverrides(collapseBuiltVariants(combined), this.#modelOverrides);
-		const withProviderBedrock = this.#applyProviderBedrockOverrides(withModelOverrides);
-		this.#unprojectedModels = this.#applyDiscoveryPolicies(this.#applyRuntimeProviderOverrides(withProviderBedrock));
+		const withProviderScoped = this.#applyProviderScopedOverrides(withModelOverrides);
+		this.#unprojectedModels = this.#applyDiscoveryPolicies(this.#applyRuntimeProviderOverrides(withProviderScoped));
 		this.#models = this.#withCatalogMetrics(this.#applyRuntimeModelModifiers(this.#unprojectedModels));
 	}
 
@@ -2357,21 +2361,14 @@ export class ModelRegistry {
 		return buildModel(this.#applyProviderTransportOverride(toModelSpec(model), override));
 	}
 
-	#applyProviderBedrockOverrides(models: Model<Api>[]): Model<Api>[] {
+	#applyProviderScopedOverrides(models: Model<Api>[]): Model<Api>[] {
 		if (this.#providerOverrides.size === 0) return models;
 		return models.map(model => {
 			const override = this.#providerOverrides.get(model.provider);
 			if (!override) return model;
-			const bedrockFields = bedrockProviderFields(override);
-			if (
-				bedrockFields.guardrailIdentifier === undefined &&
-				bedrockFields.guardrailVersion === undefined &&
-				bedrockFields.guardrailTrace === undefined &&
-				bedrockFields.requestMetadata === undefined
-			) {
-				return model;
-			}
-			return buildModel({ ...toModelSpec(model), ...bedrockFields } as ModelSpec<Api>);
+			const scopedFields = providerScopedFields(override);
+			if (Object.keys(scopedFields).length === 0) return model;
+			return buildModel({ ...toModelSpec(model), ...scopedFields } as ModelSpec<Api>);
 		});
 	}
 
@@ -3154,7 +3151,7 @@ export class ModelRegistry {
 						return this.#applyProviderTransportOverrideToModel(model, runtimeTransportOverride);
 					})
 				: nextModels;
-			this.#unprojectedModels = this.#applyProviderBedrockOverrides(nextModelsWithTransport);
+			this.#unprojectedModels = this.#applyProviderScopedOverrides(nextModelsWithTransport);
 
 			this.#models = this.#withCatalogMetrics(this.#applyRuntimeModelModifiers(this.#unprojectedModels));
 			this.#invalidateProviderModelCache(providerName);
@@ -3337,6 +3334,7 @@ export interface ProviderConfigInput {
 		compat?: ModelSpec<Api>["compat"];
 		contextPromotionTarget?: string;
 		compactionModel?: string;
+		expectedUpstreamModel?: string;
 		remoteCompaction?: RemoteCompactionConfig<Api>;
 		premiumMultiplier?: number;
 	}>;

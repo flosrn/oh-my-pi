@@ -83,7 +83,7 @@ import {
 	ANTHROPIC_USAGE_LIMIT_HEADER,
 	parseAnthropicSlowModeHeaders,
 } from "./anthropic-slow-mode";
-import { notifyProviderResponse } from "../utils/provider-response";
+import { captureServedTarget, clearServedTarget, notifyProviderResponse } from "../utils/provider-response";
 import { getHeadersFromError, getRetryAfterMsFromHeaders } from "../utils/retry-after";
 import { COMBINATOR_KEYS, NO_STRICT, toolWireSchema } from "../utils/schema";
 import { spillToDescription } from "../utils/schema/spill";
@@ -2417,7 +2417,7 @@ const streamAnthropicOnce = (
 				output.content.length = 0;
 				output.model = model.id;
 				output.responseId = undefined;
-				output.upstreamModel = undefined;
+				clearServedTarget(output);
 				output.errorMessage = undefined;
 				output.stopDetails = undefined;
 				output.inputTransformations = undefined;
@@ -2568,6 +2568,7 @@ const streamAnthropicOnce = (
 						if (requestTimeout !== undefined) clearTimeout(requestTimeout);
 					}
 					await notifyProviderResponse(options, response, model, requestId);
+					captureServedTarget(output, response, model);
 					if (slowMode) {
 						const slowSignal = parseAnthropicSlowModeHeaders(response.headers);
 						if (slowSignal) slowMode.observe(slowSignal, slowLane);
@@ -3206,7 +3207,7 @@ const streamAnthropicOnce = (
 						output.content.length = 0;
 						output.model = model.id;
 						output.responseId = undefined;
-						output.upstreamModel = undefined;
+						clearServedTarget(output);
 						output.errorMessage = undefined;
 						output.providerPayload = undefined;
 						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
@@ -3234,7 +3235,7 @@ const streamAnthropicOnce = (
 						output.content.length = 0;
 						output.model = model.id;
 						output.responseId = undefined;
-						output.upstreamModel = undefined;
+						clearServedTarget(output);
 						output.errorMessage = undefined;
 						output.inputTransformations = undefined;
 						output.providerPayload = undefined;
@@ -3268,7 +3269,7 @@ const streamAnthropicOnce = (
 						output.content.length = 0;
 						output.model = model.id;
 						output.responseId = undefined;
-						output.upstreamModel = undefined;
+						clearServedTarget(output);
 						output.errorMessage = undefined;
 						output.providerPayload = undefined;
 						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
@@ -3310,6 +3311,7 @@ const streamAnthropicOnce = (
 						output.content.length = 0;
 						output.model = model.id;
 						output.responseId = undefined;
+						clearServedTarget(output);
 						output.errorMessage = undefined;
 						output.inputTransformations = undefined;
 						output.providerPayload = undefined;
@@ -3338,7 +3340,7 @@ const streamAnthropicOnce = (
 						output.content.length = 0;
 						output.model = model.id;
 						output.responseId = undefined;
-						output.upstreamModel = undefined;
+						clearServedTarget(output);
 						output.errorMessage = undefined;
 						output.providerPayload = undefined;
 						output.usage = createEmptyUsage(copilotDynamicHeaders?.premiumRequests);
@@ -3426,6 +3428,7 @@ const streamAnthropicOnce = (
 					output.content.length = 0;
 					output.model = model.id;
 					output.responseId = undefined;
+					clearServedTarget(output);
 					output.errorMessage = undefined;
 					output.stopDetails = undefined;
 					output.providerPayload = undefined;

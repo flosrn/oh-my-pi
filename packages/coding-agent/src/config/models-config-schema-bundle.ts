@@ -220,6 +220,8 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"contextPromotionTarget?": "string",
 		"compactionModel?": "string",
 		"remoteCompaction?": RemoteCompactionSchema,
+		/** Bare model id a router is expected to serve this model with (its served-model header value). */
+		"expectedUpstreamModel?": "string",
 	}).narrow((value, ctx) => {
 		// Enforce id non-empty
 		if (typeof value.id === "string" && value.id.length === 0) {
@@ -277,6 +279,7 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"contextPromotionTarget?": "string",
 		"compactionModel?": "string",
 		"remoteCompaction?": RemoteCompactionSchema,
+		"expectedUpstreamModel?": "string",
 	}).narrow((value, ctx) => {
 		if (value.name !== undefined && typeof value.name === "string" && value.name.length === 0) {
 			return ctx.mustBe("name a non-empty string");
@@ -352,6 +355,19 @@ export const getModelsConfigSchemaBundle = once(() => {
 		 * provider (max 16 entries; keys/values limited to `[a-zA-Z0-9\s:_@$#=/+,-.]`).
 		 */
 		"requestMetadata?": { "[string]": "string" },
+		/**
+		 * Response headers in which a router behind this provider names the target
+		 * that served each request. Each declared header is copied onto the
+		 * assistant message: `model` → `upstreamModel`, `provider` →
+		 * `upstreamProvider`, `account` → `upstreamAccount`, `fallbackAttempts` →
+		 * `upstreamFallbackAttempts` (a non-negative integer).
+		 */
+		"servedHeaders?": {
+			"model?": "string",
+			"provider?": "string",
+			"account?": "string",
+			"fallbackAttempts?": "string",
+		},
 		/**
 		 * Streaming transport override. When set to `"pi-native"`, omp dispatches
 		 * every model under this provider via the auth-gateway's

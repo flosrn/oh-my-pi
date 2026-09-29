@@ -2692,6 +2692,81 @@ describe("ModelRegistry", () => {
 		});
 	});
 
+	describe("served headers", () => {
+		const servedHeaders = {
+			model: "x-served-model",
+			provider: "x-served-provider",
+			account: "x-served-account",
+			fallbackAttempts: "x-served-attempts-failed",
+		};
+		const routerModel = (id: string, extra?: Record<string, unknown>) => ({
+			id,
+			name: id,
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+			...extra,
+		});
+		let served: ModelRegistry;
+		beforeAll(() => {
+			served = readonlyRegistry({
+				providers: {
+					router: {
+						baseUrl: "https://router.example.test",
+						apiKey: "TEST_KEY",
+						api: "anthropic-messages",
+						servedHeaders,
+						models: [routerModel("opus-handle", { expectedUpstreamModel: "claude-opus-5" }), routerModel("pool")],
+						modelOverrides: { pool: { name: "Pool" } },
+					},
+					anthropic: { servedHeaders: { account: "x-served-account" } },
+				},
+			});
+		});
+
+		test("servedHeaders on a provider reaches every model of that provider", () => {
+			const models = getModelsForProvider(served, "router");
+			expect(models.map(model => model.id).sort()).toEqual(["opus-handle", "pool"]);
+			for (const model of models) expect(model.servedHeaders).toEqual(servedHeaders);
+		});
+
+		test("servedHeaders alone on an override-only provider reaches its built-in models", () => {
+			const models = getModelsForProvider(served, "anthropic");
+			expect(models.length).toBeGreaterThan(0);
+			for (const model of models) expect(model.servedHeaders).toEqual({ account: "x-served-account" });
+		});
+
+		test("expectedUpstreamModel stays on the model that declares it", () => {
+			expect(served.find("router", "opus-handle")?.expectedUpstreamModel).toBe("claude-opus-5");
+			expect(served.find("router", "pool")?.expectedUpstreamModel).toBeUndefined();
+		});
+
+		test("expectedUpstreamModel applies through modelOverrides", () => {
+			const overridden = readonlyRegistry({
+				providers: {
+					router: {
+						baseUrl: "https://router.example.test",
+						apiKey: "TEST_KEY",
+						api: "anthropic-messages",
+						models: [routerModel("opus-handle"), routerModel("pool")],
+						modelOverrides: { "opus-handle": { expectedUpstreamModel: "claude-opus-5" } },
+					},
+				},
+			});
+			expect(overridden.find("router", "opus-handle")?.expectedUpstreamModel).toBe("claude-opus-5");
+			expect(overridden.find("router", "pool")?.expectedUpstreamModel).toBeUndefined();
+			expect(overridden.find("router", "pool")?.servedHeaders).toBeUndefined();
+		});
+
+		test("providers without servedHeaders carry none", () => {
+			for (const model of getModelsForProvider(sharedBuiltin, "anthropic")) {
+				expect(model.servedHeaders).toBeUndefined();
+			}
+		});
+	});
+
 	describe("provider auth: oauth", () => {
 		// isOAuth is baked onto each model at construction/refresh, so building the
 		// fixtures (and their offline refresh) in beforeAll on one dedicated auth
