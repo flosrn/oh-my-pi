@@ -14,14 +14,14 @@ function buildServedTarget(
 	account: unknown,
 	fallbackAttempts: unknown,
 ): ServedTarget | undefined {
-	const served: ServedTarget = {};
-	if (typeof provider === "string" && provider) served.provider = provider;
-	if (typeof model === "string" && model) served.model = model;
-	if (typeof account === "string" && account) served.account = account;
+	let served: ServedTarget | undefined;
+	if (typeof provider === "string" && provider) (served ??= {}).provider = provider;
+	if (typeof model === "string" && model) (served ??= {}).model = model;
+	if (typeof account === "string" && account) (served ??= {}).account = account;
 	if (typeof fallbackAttempts === "number" && Number.isInteger(fallbackAttempts) && fallbackAttempts >= 0) {
-		served.fallbackAttempts = fallbackAttempts;
+		(served ??= {}).fallbackAttempts = fallbackAttempts;
 	}
-	return Object.keys(served).length > 0 ? served : undefined;
+	return served;
 }
 
 /**
@@ -44,14 +44,4 @@ export function parseServedTarget(value: unknown): ServedTarget | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const record = value as Record<string, unknown>;
 	return buildServedTarget(record.provider, record.model, record.account, record.fallbackAttempts);
-}
-
-/** Field-wise equality; two absent targets are equal. */
-export function sameServedTarget(a: ServedTarget | undefined, b: ServedTarget | undefined): boolean {
-	return (
-		a?.provider === b?.provider &&
-		a?.model === b?.model &&
-		a?.account === b?.account &&
-		a?.fallbackAttempts === b?.fallbackAttempts
-	);
 }

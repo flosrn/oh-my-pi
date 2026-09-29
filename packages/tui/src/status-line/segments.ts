@@ -219,20 +219,29 @@ const statusSegment: StatusLineSegment = {
 };
 
 /**
+ * Last assistant message when it came from the selected model — the only turn
+ * the model segment's served tail describes — else `undefined`. With none, the
+ * segment renders no served tail at any `modelServedDrop`.
+ */
+export function servedTailTurn(ctx: SegmentContext) {
+	const { model, messages } = ctx.session.state;
+	if (!model || !messages) return undefined;
+	const last = messages.findLast(m => m.role === "assistant");
+	if (last?.role !== "assistant" || last.provider !== model.provider || last.model !== model.id) return undefined;
+	return last;
+}
+
+/**
  * Served-target tail of the model segment, shown only while the last assistant
  * turn came from the selected model, so a card switch renders exactly as before
  * until the new card answers: ` → provider/model` unless the router served the
  * card's declared `expectedUpstreamModel`, then ` · alias` and ` ↻N`.
  */
 function servedModelTail(ctx: SegmentContext): string {
-	const { model, messages } = ctx.session.state;
 	const drop = ctx.modelServedDrop ?? 0;
-	if (!model || !messages || drop >= 3) return "";
-	let last: (typeof messages)[number] | undefined;
-	for (let i = messages.length - 1; i >= 0 && !last; i--) {
-		if (messages[i].role === "assistant") last = messages[i];
-	}
-	if (last?.role !== "assistant" || last.provider !== model.provider || last.model !== model.id) return "";
+	if (drop >= 3) return "";
+	const last = servedTailTurn(ctx);
+	if (!last) return "";
 	const parts = servedModelParts(
 		undefined,
 		{
@@ -244,7 +253,7 @@ function servedModelTail(ctx: SegmentContext): string {
 		ctx.modelDisplayAliases ?? {},
 	);
 	let tail = "";
-	if (drop < 1 && parts.servedModel && last.upstreamModel !== model.expectedUpstreamModel) {
+	if (drop < 1 && parts.servedModel && last.upstreamModel !== ctx.session.state.model?.expectedUpstreamModel) {
 		const target = parts.servedProvider ? `${parts.servedProvider}/${parts.servedModel}` : parts.servedModel;
 		tail += accentFg(ctx, "statusLineModel", ` ${theme.icon.served} ${target}`);
 	}

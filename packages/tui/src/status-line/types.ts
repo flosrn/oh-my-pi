@@ -42,7 +42,7 @@ export interface StatusLineSegmentOptions {
 	time?: { format?: "12h" | "24h"; showSeconds?: boolean };
 }
 
-export interface StatusLineSettings {
+export interface StatusLineSettings extends ModelDisplayAliases {
 	preset?: StatusLinePreset;
 	leftSegments?: StatusLineSegmentId[];
 	rightSegments?: StatusLineSegmentId[];
@@ -60,10 +60,6 @@ export interface StatusLineSettings {
 	 *  usage. `embedded` moves configured context segments into the annotated
 	 *  gauge as percentage and window labels. Box composer only. */
 	contextLine?: ContextLineMode;
-	/** Account email → alias for the served account shown on the model segment. */
-	accountAliases?: Readonly<Record<string, string>>;
-	/** Router-reported provider value → label for the served provider. */
-	providerAliases?: Readonly<Record<string, string>>;
 }
 
 export type EffectiveStatusLineSettings = Required<

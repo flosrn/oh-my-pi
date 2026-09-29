@@ -38,7 +38,7 @@ import {
 import { canReuseCachedPr, createPrCacheContext, isSamePrCacheContext, type PrCacheContext } from "./git-utils";
 import { summarizeUsageResetCredits } from "../overlays/usage-display";
 import { getPreset } from "./presets";
-import { renderSegment, type SegmentContext } from "./segments";
+import { renderSegment, type SegmentContext, servedTailTurn } from "./segments";
 import { getSeparator } from "./separators";
 import type {
 	CollabStatus,
@@ -2774,11 +2774,13 @@ export class StatusLineComponent<TSession extends StatusLineSession = StatusLine
 				: modelRightIdx >= 0
 					? modelRightIdx + (right.length - rightSegIds.length)
 					: -1;
+			// Without a served tail every drop level renders the same segment.
+			const modelHasServedTail = modelIdx >= 0 && servedTailTurn(ctx) !== undefined;
 			let modelServedDrop = 0;
 			const shedModelServedParts = (maxDrop: number): void => {
 				const parts = modelOnLeft ? left : right;
 				const widths = modelOnLeft ? leftWidths : rightWidths;
-				if (modelIdx < 0 || modelIdx >= parts.length) return;
+				if (!modelHasServedTail || modelIdx >= parts.length) return;
 				while (totalWidth() > topFillWidth && modelServedDrop < maxDrop) {
 					modelServedDrop++;
 					const content = renderSegment("model", { ...ctx, modelServedDrop }).content;

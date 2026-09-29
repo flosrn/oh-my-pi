@@ -120,17 +120,18 @@ function assistantMetrics(message: Record<string, unknown>): AssistantMetrics {
 	const content = Array.isArray(message.content) ? message.content : [];
 	const provider = typeof message.provider === "string" ? message.provider : undefined;
 	const model = typeof message.model === "string" ? message.model : undefined;
+	const served = assistantTurnProducedOutput({
+		stopReason: message.stopReason,
+		content,
+	} as Pick<AssistantMessage, "stopReason" | "content">);
 	return {
 		tokens: usageTokens(usage),
 		tools: content.filter(part => recordOf(part)?.type === "toolCall").length,
 		cost: finiteNumber(cost?.total),
 		contextTokens: finiteNumber(usage.totalTokens) || undefined,
 		resolvedModel: provider && model ? `${provider}/${model}` : undefined,
-		served: assistantTurnProducedOutput({
-			stopReason: message.stopReason,
-			content,
-		} as Pick<AssistantMessage, "stopReason" | "content">),
-		servedTarget: servedTargetFromMessage(message),
+		served,
+		servedTarget: served ? servedTargetFromMessage(message) : undefined,
 	};
 }
 
