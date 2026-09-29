@@ -225,3 +225,64 @@ describe("persisted agent model attribution", () => {
 		expect(history?.resolvedModelIsFallback).toBe(true);
 	});
 });
+
+const ROUTER = { provider: "router", model: "task" };
+
+/** An assistant turn a router served, carrying the `upstream*` fields it reported. */
+function routedAssistant(id: string, parentId: string, upstream: Record<string, unknown>): string {
+	const record = JSON.parse(
+		assistant(id, parentId, ROUTER, "stop", [{ type: "text", text: `${id} answered` }]),
+	) as { message: Record<string, unknown> };
+	Object.assign(record.message, upstream);
+	return JSON.stringify(record);
+}
+
+describe("persisted agent served target", () => {
+	it("exposes the served target of the last productive turn", async () => {
+		using tempDir = TempDir.createSync("@omp-served-replay-");
+		const registry = await historyFor(tempDir.path(), "Served", [
+			...transcriptHead(),
+			routedAssistant("a1", "si", { upstreamProvider: "cc", upstreamAccount: "bob@example.com" }),
+			routedAssistant("a2", "a1", {
+				upstreamProvider: "cx",
+				upstreamModel: "gpt-6-sol",
+				upstreamAccount: "alice@example.com",
+				upstreamFallbackAttempts: 2,
+			}),
+			// A failed turn after it served nothing, so it does not move the target.
+			assistant("e1", "a2", ROUTER, "error", []),
+		]);
+
+		expect(registry.get("Served")?.history?.served).toEqual({
+			provider: "cx",
+			model: "gpt-6-sol",
+			account: "alice@example.com",
+			fallbackAttempts: 2,
+		});
+	});
+
+	it("reports no served target when a native turn follows a served one", async () => {
+		using tempDir = TempDir.createSync("@omp-served-native-");
+		const registry = await historyFor(tempDir.path(), "Native", [
+			...transcriptHead(),
+			routedAssistant("a1", "si", { upstreamModel: "gpt-6-sol", upstreamAccount: "alice@example.com" }),
+			assistant("a2", "a1", SONNET, "stop", [{ type: "text", text: "served natively" }]),
+		]);
+
+		const history = registry.get("Native")?.history;
+		expect(history?.served).toBeUndefined();
+		expect(history?.metrics?.requests).toBe(2);
+	});
+
+	it("sets nothing for a transcript written before served fields existed", async () => {
+		using tempDir = TempDir.createSync("@omp-served-legacy-");
+		const registry = await historyFor(tempDir.path(), "Legacy", [
+			...transcriptHead(),
+			assistant("a1", "si", SONNET, "stop", [{ type: "text", text: "old transcript" }]),
+		]);
+
+		const history = registry.get("Legacy")?.history;
+		expect(history?.resolvedModel).toBe("anthropic/claude-sonnet-5");
+		expect(history && "served" in history).toBe(false);
+	});
+});

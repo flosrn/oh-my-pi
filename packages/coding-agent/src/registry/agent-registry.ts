@@ -13,7 +13,12 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
 import { oneLineLabel } from "@oh-my-pi/pi-tui/tools/task";
 
-import { MAIN_AGENT_ID, type AgentStatus, type AgentMetricsSummary } from "@oh-my-pi/pi-tui/overlays/agent-hub-types";
+import {
+	MAIN_AGENT_ID,
+	type AgentStatus,
+	type AgentMetricsSummary,
+	type ServedTarget,
+} from "@oh-my-pi/pi-tui/overlays/agent-hub-types";
 export { MAIN_AGENT_ID };
 export type { AgentStatus, AgentMetricsSummary };
 
@@ -48,6 +53,8 @@ export interface AgentHistorySummary {
 	resolvedModel?: string;
 	/** Whether the last resolved model was selected by retry fallback routing. */
 	resolvedModelIsFallback?: boolean;
+	/** Served target of the last productive assistant turn, when a router reported one. */
+	served?: ServedTarget;
 	metrics?: AgentMetricsSummary;
 	readOnly?: boolean;
 	/** Durable task output artifact, when the executor wrote one. */

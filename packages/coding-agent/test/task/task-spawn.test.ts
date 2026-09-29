@@ -567,6 +567,92 @@ describe("task spawn routing", () => {
 		},
 	);
 
+	it("carries the served target through detached progress, job snapshots and settlement", async () => {
+		vi.spyOn(discoveryModule, "discoverAgents").mockResolvedValue({ agents: [taskAgent], projectAgentsDir: null });
+		const gate = deferred();
+		let publishProgress: ((metadata: Partial<AgentProgress>) => void) | undefined;
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			const progress: AgentProgress = {
+				...makeResult(options.id ?? "?"),
+				status: "running",
+				recentTools: [],
+				recentOutput: [],
+				toolCount: 0,
+				cost: 0,
+				resolvedModel: "router/task",
+				resolvedModelIdentity: "router/task",
+				served: { provider: "cc", model: "claude-opus-5-5", account: "alice@example.com", fallbackAttempts: 1 },
+			};
+			options.onProgress?.(progress);
+			publishProgress = metadata => options.onProgress?.({ ...progress, ...metadata });
+			await gate.promise;
+			return makeResult(options.id ?? "?", {
+				resolvedModel: "router/task",
+				resolvedModelIdentity: "router/task",
+				served: { provider: "cx", model: "gpt-6-sol", account: "bob@example.com" },
+			});
+		});
+		const manager = createManager();
+		const session = createSession({ manager });
+		const tool = await TaskTool.create(session);
+		const result = await tool.execute("tc-served", { agent: "task", name: "Served", task: "work" } as TaskParams);
+		const job = manager.getJob(result.details!.async!.jobId)!;
+		try {
+			await pollUntil(() => getJobProgress(job)?.served?.account === "alice@example.com");
+			expect(snapshotJobs(session, [job])[0]?.served).toEqual({
+				provider: "cc",
+				model: "claude-opus-5-5",
+				account: "alice@example.com",
+				fallbackAttempts: 1,
+			});
+			// A later native turn clears it on the rebuilt parent progress.
+			publishProgress!({ served: undefined });
+			await pollUntil(() => getJobProgress(job)?.served === undefined);
+			expect(snapshotJobs(session, [job])[0]?.served).toBeUndefined();
+		} finally {
+			gate.resolve();
+			await job.promise;
+		}
+		expect(getJobProgress(job)?.served).toEqual({ provider: "cx", model: "gpt-6-sol", account: "bob@example.com" });
+		expect(snapshotJobs(session, [job])[0]?.served).toEqual({
+			provider: "cx",
+			model: "gpt-6-sol",
+			account: "bob@example.com",
+		});
+	});
+
+	it("drops the served target when the settled result resolved no model", async () => {
+		vi.spyOn(discoveryModule, "discoverAgents").mockResolvedValue({ agents: [taskAgent], projectAgentsDir: null });
+		const gate = deferred();
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			options.onProgress?.({
+				...makeResult(options.id ?? "?"),
+				status: "running",
+				recentTools: [],
+				recentOutput: [],
+				toolCount: 0,
+				cost: 0,
+				resolvedModel: "router/task",
+				served: { account: "alice@example.com" },
+			});
+			await gate.promise;
+			return makeResult(options.id ?? "?");
+		});
+		const manager = createManager();
+		const session = createSession({ manager });
+		const tool = await TaskTool.create(session);
+		const result = await tool.execute("tc-served-drop", { agent: "task", name: "Dropped", task: "work" } as TaskParams);
+		const job = manager.getJob(result.details!.async!.jobId)!;
+		try {
+			await pollUntil(() => getJobProgress(job)?.served?.account === "alice@example.com");
+		} finally {
+			gate.resolve();
+			await job.promise;
+		}
+		expect(getJobProgress(job)?.served).toBeUndefined();
+		expect(snapshotJobs(session, [job])[0]?.served).toBeUndefined();
+	});
+
 	it("retains the temporary artifacts directory for a completed async spawn (in-memory session)", async () => {
 		// Regression: with no session file (in-memory session), leaseArtifacts()
 		// allocates a temporary directory that runStructuredSubagent() deletes
