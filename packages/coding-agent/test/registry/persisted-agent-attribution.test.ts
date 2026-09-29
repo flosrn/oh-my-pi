@@ -230,9 +230,9 @@ const ROUTER = { provider: "router", model: "task" };
 
 /** An assistant turn a router served, carrying the `upstream*` fields it reported. */
 function routedAssistant(id: string, parentId: string, upstream: Record<string, unknown>): string {
-	const record = JSON.parse(
-		assistant(id, parentId, ROUTER, "stop", [{ type: "text", text: `${id} answered` }]),
-	) as { message: Record<string, unknown> };
+	const record = JSON.parse(assistant(id, parentId, ROUTER, "stop", [{ type: "text", text: `${id} answered` }])) as {
+		message: Record<string, unknown>;
+	};
 	Object.assign(record.message, upstream);
 	return JSON.stringify(record);
 }
