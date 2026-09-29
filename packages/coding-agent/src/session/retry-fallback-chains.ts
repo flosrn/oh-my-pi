@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
+import type { ServedTarget } from "@oh-my-pi/pi-tui/overlays/agent-hub-types";
 import type { ModelRegistry } from "../config/model-registry";
 import { formatModelSelectorValue, parseModelString } from "@oh-my-pi/pi-tui/overlays/model-selector";
 import { formatModelString, formatModelStringWithRouting } from "../config/model-resolver";
@@ -78,6 +79,12 @@ export interface ServingModel {
 	 * instead of the one the run started on.
 	 */
 	contextWindow?: number | null;
+	/**
+	 * What a router reported as serving the attributed turn (provider, model,
+	 * account, failed attempts), taken from that message's `upstream*` fields.
+	 * Absent when the turn carried none, e.g. a natively served turn.
+	 */
+	served?: ServedTarget;
 }
 
 const RETRY_BACKOFF_MAX_DELAY_MS = 8_000;

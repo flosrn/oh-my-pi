@@ -24,6 +24,7 @@ import {
 	type ConfiguredThinkingLevel,
 } from "../render/render-utils";
 import type { StructuredSubagentOutput } from "./task";
+import type { ServedTarget } from "../overlays/agent-hub-types";
 import type { RenderResultOptions, ToolRenderer, ToolActivitySummary } from "./renderer";
 import type { IrcDeliveryReceipt, IrcMessage } from "./irc";
 
@@ -52,6 +53,8 @@ export interface JobSnapshot {
 	resolvedModelIdentity?: string;
 	/** Explicit thinking metadata, independent of the model identity. */
 	resolvedThinkingLevel?: ConfiguredThinkingLevel;
+	/** What a router reported as serving the task's latest productive turn. */
+	served?: ServedTarget;
 	/** True when the task progress reports an attached live advisor. */
 	advisor?: boolean;
 	resultText?: string;

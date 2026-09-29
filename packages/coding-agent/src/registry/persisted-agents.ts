@@ -2,9 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ServedTarget } from "@oh-my-pi/pi-tui/overlays/agent-hub-types";
 import { ADVISOR_TRANSCRIPT_FILENAME, isAdvisorTranscriptName } from "../advisor/transcript-recorder";
 import { resolveExplicitModelRole } from "../config/model-resolver";
 import { assistantTurnProducedOutput } from "../session/messages";
+import { servedTargetFromMessage } from "../session/served-target";
 import { EPHEMERAL_MODEL_CHANGE_ROLE } from "../session/session-entries";
 import { visitEntriesFromFileStream } from "../session/session-loader";
 import { loadBundledAgents } from "../task/agents";
@@ -108,6 +110,8 @@ interface AssistantMetrics {
 	 * same verdict the session reached while running it.
 	 */
 	served: boolean;
+	/** Served target the message reports through its `upstream*` fields. */
+	servedTarget?: ServedTarget;
 }
 
 function assistantMetrics(message: Record<string, unknown>): AssistantMetrics {
@@ -126,6 +130,7 @@ function assistantMetrics(message: Record<string, unknown>): AssistantMetrics {
 			stopReason: message.stopReason,
 			content,
 		} as Pick<AssistantMessage, "stopReason" | "content">),
+		servedTarget: servedTargetFromMessage(message),
 	};
 }
 
@@ -220,6 +225,9 @@ async function readPersistedAgentHistory(
 	let modelRole: string | undefined;
 	let contextTokens: number | undefined;
 	let servedModel: string | undefined;
+	// Target of the same turn `servedModel` comes from — the newest productive
+	// one — so a native turn after a routed one leaves none, as it does live.
+	let servedTarget: ServedTarget | undefined;
 	let latestModelChange: { model: string; resolvedModelIsFallback: boolean } | undefined;
 	const visited = new Set<string>();
 	for (let id = leafId; id && !visited.has(id); id = parents.get(id)) {
@@ -247,6 +255,7 @@ async function readPersistedAgentHistory(
 		if (!assistant) continue;
 		if (servedModel === undefined && assistant.served && assistant.resolvedModel) {
 			servedModel = assistant.resolvedModel;
+			servedTarget = assistant.servedTarget;
 		}
 		metrics.requests++;
 		metrics.tokens += assistant.tokens;
@@ -267,6 +276,7 @@ async function readPersistedAgentHistory(
 		...(metrics.requests > 0 ? { metrics } : {}),
 		...(resolvedModel ? { resolvedModel, resolvedModelIsFallback } : {}),
 		...(modelRole ? { modelRole } : {}),
+		...(servedTarget ? { served: servedTarget } : {}),
 	};
 }
 

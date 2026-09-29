@@ -16,11 +16,23 @@ export interface AgentMetricsSummary {
 	contextTokens?: number;
 	contextWindow?: number;
 }
+/**
+ * What a router reported as actually serving a turn: provider, model and
+ * account, plus how many dispatched attempts failed before it. Mirrors the
+ * `upstream*` fields of the assistant message it was captured from; every
+ * field is optional because a router may report only some of them.
+ */
+export interface ServedTarget {
+	provider?: string;
+	model?: string;
+	account?: string;
+	fallbackAttempts?: number;
+}
 /** Live session data and actions used by the agent hub. */
 export interface AgentHubSession {
 	readonly thinkingLevel: ThinkingLevel | undefined;
 	readonly model: Model | undefined;
-	readonly servingModel?: { selector: string; isFallback: boolean };
+	readonly servingModel?: { selector: string; isFallback: boolean; served?: ServedTarget };
 	readonly agent?: { state: { messages: AgentMessage[] } };
 	getSessionStats(): {
 		tokens: { input: number; output: number; cacheWrite: number };
@@ -48,6 +60,8 @@ export interface AgentRecordLike {
 		modelRole?: string;
 		resolvedModel?: string;
 		resolvedModelIsFallback?: boolean;
+		/** Served target of the last productive assistant turn, when a router reported one. */
+		served?: ServedTarget;
 		metrics?: AgentMetricsSummary;
 		readOnly?: boolean;
 		outputPath?: string;

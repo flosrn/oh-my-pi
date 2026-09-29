@@ -10,6 +10,7 @@ import type { AsyncJob, AsyncJobDetails, AsyncJobManager, AsyncJobType } from ".
 
 import { renderStructuredJson, structuredStatusLabel } from "../session/async-job-delivery";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
+import { parseServedTarget } from "../session/served-target";
 import type { StructuredSubagentOutput } from "@oh-my-pi/pi-tui/tools/task";
 import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
@@ -165,6 +166,7 @@ export function snapshotJobs(
 		const exitCode = typeof latest.latestDetails?.exitCode === "number" ? latest.latestDetails.exitCode : undefined;
 		let resolvedModelIdentity: string | undefined;
 		let resolvedThinkingLevel: JobSnapshot["resolvedThinkingLevel"];
+		let served: JobSnapshot["served"];
 		let advisor = false;
 		if (latest.type === "task") {
 			const progressValue = latest.latestDetails?.progress;
@@ -193,6 +195,7 @@ export function snapshotJobs(
 				if (typeof thinkingValue === "string") {
 					resolvedThinkingLevel = parseConfiguredThinkingLevel(thinkingValue);
 				}
+				served = parseServedTarget(progressRecord?.served);
 				advisor = progressRecord?.advisor === true;
 			}
 		}
@@ -206,6 +209,7 @@ export function snapshotJobs(
 			...(resolvedModel ? { resolvedModel } : {}),
 			...(resolvedModelIdentity ? { resolvedModelIdentity } : {}),
 			...(resolvedThinkingLevel !== undefined ? { resolvedThinkingLevel } : {}),
+			...(served ? { served } : {}),
 			...(advisor ? { advisor: true } : {}),
 			...(!resultConsumed && options.includeResults !== false && latest.resultText
 				? { resultText: latest.resultText }

@@ -68,6 +68,7 @@ import {
 	type ServingModel,
 	validateRetryFallbackChains,
 } from "./retry-fallback-chains";
+import { servedTargetFromMessage } from "./served-target";
 import { describeUsageFallback } from "./retry-fallback-reason";
 import { getLatestCompactionEntry } from "./session-context";
 import { EPHEMERAL_MODEL_CHANGE_ROLE, type SessionEntry } from "./session-entries";
@@ -482,6 +483,7 @@ export class TurnRecovery {
 		const model = this.#host.model();
 		if (model) {
 			const level = this.#host.thinkingLevel();
+			const served = servedTargetFromMessage(message);
 			this.#lastServed = {
 				attribution: {
 					selector: formatRetryFallbackSelector(model, level),
@@ -489,6 +491,7 @@ export class TurnRecovery {
 					thinkingLevel: level,
 					isFallback: this.#fallbackRouted,
 					contextWindow: model.contextWindow,
+					...(served ? { served } : {}),
 				},
 				sessionId: this.#host.sessionManager.getSessionId(),
 			};
