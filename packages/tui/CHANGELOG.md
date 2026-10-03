@@ -189,6 +189,9 @@
 ### Fixed
 
 - The model browser shows `varies`, `included`, or `pricing unknown` for models whose catalog declares that state, instead of labeling them `free` ([#11613](https://github.com/can1357/oh-my-pi/pull/11613) by [@will-bogusz](https://github.com/will-bogusz)).
+### Added
+
+- The status line model segment, Agent Hub, and job rows can show the provider, model, and account a router reports as having served the turn.
 
 ## [18.4.3] - 2026-09-28
 

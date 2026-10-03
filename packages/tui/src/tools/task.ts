@@ -34,6 +34,7 @@ import {
 	previewLine,
 	previewWindowRows,
 	replaceTabs,
+	servedModelParts,
 	shortenEmbeddedPaths,
 	shortenPath,
 	shortenToolArgumentPaths,
@@ -704,6 +705,7 @@ function renderAgentProgress(
 			id: formatTaskId(progress.id),
 			width: maxWidth,
 			model: progress.resolvedModelIdentity ?? progress.resolvedModel,
+			served: progress.served,
 			thinkingLevel: progress.resolvedThinkingLevel,
 			advisor: progress.advisor,
 			spinnerFrame,
@@ -1030,7 +1032,7 @@ function renderAgentResult(
 	const badges = `${roleBadge}${statusBadge}`;
 	const modelBadge = isFeedModelBadgeEnabled()
 		? formatFeedModelBadge(
-				result.resolvedModelIdentity ?? result.resolvedModel,
+				servedModelParts(result.resolvedModelIdentity ?? result.resolvedModel, result.served),
 				result.resolvedThinkingLevel,
 				result.advisor,
 				theme,

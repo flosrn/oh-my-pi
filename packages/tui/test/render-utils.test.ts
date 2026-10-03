@@ -1,10 +1,11 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import * as natives from "@oh-my-pi/pi-natives/path";
 import { KeybindingsManager, setKeyHintPlatform } from "@oh-my-pi/pi-tui/app-keybindings";
 import { getThemeByName, initTheme, type Theme, theme } from "@oh-my-pi/pi-tui/theme";
+import { setSymbolPreset } from "@oh-my-pi/pi-tui/theme/theme";
 import {
 	dedupeParseErrors,
 	expandKeyHint,
@@ -14,6 +15,8 @@ import {
 	formatExpandHint,
 	formatParseErrors,
 	formatFeedModelBadge,
+	servedModelParts,
+	truncateMiddleToWidth,
 	PREVIEW_LIMITS,
 	resolveImageOptions,
 	setInlineImageMaxColumns,
@@ -213,6 +216,162 @@ describe("feed model badges", () => {
 		).toBe(glyph);
 		expect(formatFeedModelBadge("model", ThinkingLevel.High, true, uiTheme, 0)).toBe("");
 		expect(formatFeedModelBadge(undefined, ThinkingLevel.High, true, uiTheme)).toBe("");
+	});
+});
+
+describe("served model parts", () => {
+	const aliases = { accountAliases: { "alice@example.com": "a" } };
+	const codex = { provider: "cx", model: "gpt-6-sol", account: "alice@example.com", fallbackAttempts: 1 };
+
+	it("resolves the account alias and provider label at render time", () => {
+		expect(servedModelParts("omniroute/task", codex, aliases)).toEqual({
+			requested: "omniroute/task",
+			servedProvider: "cx",
+			servedModel: "gpt-6-sol",
+			alias: "a",
+			hops: 1,
+		});
+		expect(servedModelParts("task", codex, { ...aliases, providerAliases: { cx: "codex" } }).servedProvider).toBe(
+			"codex",
+		);
+	});
+
+	it("falls back to the email local part for an unmapped account", () => {
+		expect(servedModelParts("task", { account: "first.last@example.com" }, aliases).alias).toBe("first.last");
+	});
+
+	it("drops the arrow without a model, the provider prefix without a provider, and hops at zero", () => {
+		expect(servedModelParts("task", { provider: "cx", account: "alice@example.com" }, aliases)).toEqual({
+			requested: "task",
+			alias: "a",
+		});
+		expect(servedModelParts("task", { model: "gpt-6-sol", fallbackAttempts: 0 }, aliases)).toEqual({
+			requested: "task",
+			servedModel: "gpt-6-sol",
+		});
+	});
+});
+
+describe("feed model badges with a served target", () => {
+	let uiTheme: Theme;
+
+	beforeAll(async () => {
+		const loaded = await getThemeByName("dark");
+		if (!loaded) throw new Error("Dark theme is unavailable");
+		uiTheme = loaded;
+	});
+
+	const aliases = { accountAliases: { "alice@example.com": "a" } };
+	const codex = { provider: "cx", model: "gpt-6-sol", account: "alice@example.com", fallbackAttempts: 1 };
+
+	it("drops the requested provider prefix when the full form exceeds the badge budget", () => {
+		const glyph = uiTheme.thinking.medium.split(" ")[0];
+		const badge = formatFeedModelBadge(
+			servedModelParts("omniroute/task", codex, aliases),
+			ThinkingLevel.Medium,
+			false,
+			uiTheme,
+		);
+		expect(Bun.stripANSI(badge)).toBe(`${glyph} task→cx/gpt-6-sol·a`);
+		expect(badge).toContain(uiTheme.fg("accent", "a"));
+		expect(Bun.stripANSI(badge)).not.toContain("↻");
+	});
+
+	it("keeps the requested provider when the full form fits", () => {
+		const badge = formatFeedModelBadge(servedModelParts("omniroute/task", codex, aliases), undefined, false, uiTheme);
+		expect(Bun.stripANSI(badge)).toBe("omniroute/task→cx/gpt-6-sol·a");
+	});
+
+	it("renders no separator for an absent account and no arrow for an absent model", () => {
+		expect(
+			Bun.stripANSI(
+				formatFeedModelBadge(
+					servedModelParts("task", { provider: "cx", model: "gpt-6-sol" }),
+					undefined,
+					false,
+					uiTheme,
+				),
+			),
+		).toBe("task→cx/gpt-6-sol");
+		expect(
+			Bun.stripANSI(
+				formatFeedModelBadge(
+					servedModelParts("task", { account: "alice@example.com" }, aliases),
+					undefined,
+					false,
+					uiTheme,
+				),
+			),
+		).toBe("task·a");
+	});
+
+	it("shrinks the requested id, then the served model, and never cuts the alias", () => {
+		const requested = "omniroute/some-very-long-requested-model-id";
+		const glyph = uiTheme.thinking.medium.split(" ")[0];
+		const shortServed = formatFeedModelBadge(
+			servedModelParts(requested, codex, aliases),
+			ThinkingLevel.Medium,
+			false,
+			uiTheme,
+		);
+		expect(Bun.stripANSI(shortServed)).toBe(
+			`${glyph} ${truncateMiddleToWidth("some-very-long-requested-model-id", 13)}→cx/gpt-6-sol·a`,
+		);
+
+		const longModel = "an-equally-long-served-model-identifier";
+		const bothLong = Bun.stripANSI(
+			formatFeedModelBadge(
+				servedModelParts(requested, { ...codex, model: longModel }, aliases),
+				ThinkingLevel.Medium,
+				false,
+				uiTheme,
+			),
+		);
+		expect(bothLong).toBe(`${glyph} s…id→cx/${truncateMiddleToWidth(longModel, 18)}·a`);
+		expect(Bun.stringWidth(bothLong)).toBe(30);
+	});
+
+	it("renders byte-identically to a plain identity when nothing was served", () => {
+		for (const width of [30, 12, 4]) {
+			expect(
+				formatFeedModelBadge(
+					servedModelParts("omniroute/task", undefined),
+					ThinkingLevel.High,
+					true,
+					uiTheme,
+					width,
+				),
+			).toBe(formatFeedModelBadge("omniroute/task", ThinkingLevel.High, true, uiTheme, width));
+		}
+	});
+
+	it("stays within tiny budgets", () => {
+		const parts = servedModelParts("omniroute/task", codex, aliases);
+		for (let width = 0; width <= 12; width++) {
+			expect(
+				Bun.stringWidth(formatFeedModelBadge(parts, ThinkingLevel.High, true, uiTheme, width)),
+			).toBeLessThanOrEqual(width);
+		}
+	});
+});
+
+describe("served markers under the ASCII symbol preset", () => {
+	beforeAll(async () => {
+		await initTheme();
+		await setSymbolPreset("ascii");
+	});
+	afterAll(async () => {
+		await setSymbolPreset("unicode");
+	});
+
+	it("renders the served arrow as its ASCII fallback", () => {
+		const badge = formatFeedModelBadge(
+			servedModelParts("task", { provider: "cx", model: "gpt-6-sol" }),
+			undefined,
+			false,
+			theme,
+		);
+		expect(Bun.stripANSI(badge)).toBe("task->cx/gpt-6-sol");
 	});
 });
 

@@ -598,6 +598,8 @@ export class Theme {
 			goal: this.#symbols["icon.goal"],
 			pause: this.#symbols["icon.pause"],
 			loop: this.#symbols["icon.loop"],
+			served: this.#symbols["icon.served"],
+			servedHops: this.#symbols["icon.servedHops"],
 			folder: this.#symbols["icon.folder"],
 			worktree: this.#symbols["icon.worktree"],
 			scratchFolder: this.#symbols["icon.scratchFolder"],

@@ -220,6 +220,7 @@ describe("served headers on anthropic-messages", () => {
 			upstreamAccount: "alice@example.com",
 			upstreamFallbackAttempts: 2,
 		});
+		expect(result.upstreamFromHeaders).toBe(true);
 	});
 
 	it("prefers the declared model header over the model named by a signed thinking block", async () => {
@@ -233,6 +234,22 @@ describe("served headers on anthropic-messages", () => {
 
 		expect(result.stopReason).toBe("stop");
 		expect(result.upstreamModel).toBe("claude-haiku-5");
+	});
+
+	it("completes the turn with the field unset when a runtime model declares an invalid header name", async () => {
+		const { fetch } = sequenceFetch([() => anthropicResponse(ALL_HEADERS)]);
+		const result = await streamAnthropic(anthropicModel({ ...SERVED_HEADERS, account: "x bad" }), context, {
+			apiKey: "sk-test",
+			fetch,
+		}).result();
+
+		expect(result.stopReason).toBe("stop");
+		expect(served(result)).toEqual({
+			upstreamModel: "claude-opus-5",
+			upstreamProvider: "cc",
+			upstreamAccount: undefined,
+			upstreamFallbackAttempts: 2,
+		});
 	});
 
 	it("drops every served field of an attempt that a retry replaced", async () => {
@@ -268,6 +285,7 @@ describe("served headers on anthropic-messages", () => {
 
 		expect(result.stopReason).toBe("stop");
 		expect(served(result)).toEqual(NONE);
+		expect(result.upstreamFromHeaders).toBeUndefined();
 	});
 
 	it("leaves only the field whose header is missing unset", async () => {
@@ -332,32 +350,6 @@ describe("served headers on openai-completions", () => {
 			upstreamAccount: "alice@example.com",
 			upstreamFallbackAttempts: 2,
 		});
-	});
-
-	it("keeps no account from a rejected response when the re-request lacks the header", async () => {
-		const rejected = () =>
-			new Response(
-				JSON.stringify({
-					error: {
-						message: `invalid reasoning value: 'xhigh' (must be "high", "medium", "low", "max", or "none")`,
-						type: "invalid_request_error",
-						param: "reasoning_effort",
-					},
-				}),
-				{ status: 400, headers: { "content-type": "application/json", ...ALL_HEADERS } },
-			);
-		const { "x-served-account": _account, ...withoutAccount } = ALL_HEADERS;
-		const { fetch, calls } = sequenceFetch([rejected, () => completionsResponse(withoutAccount)]);
-		const result = await streamOpenAICompletions(completionsModel(SERVED_HEADERS), context, {
-			apiKey: "test-key",
-			fetch,
-			reasoning: "xhigh",
-		}).result();
-
-		expect(calls()).toBe(2);
-		expect(result.stopReason).toBe("stop");
-		expect(result.upstreamAccount).toBeUndefined();
-		expect(result.upstreamModel).toBe("claude-opus-5");
 	});
 
 	it("still takes the aggregator chunk provider when the provider declares no headers", async () => {

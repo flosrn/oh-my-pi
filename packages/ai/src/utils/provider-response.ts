@@ -35,7 +35,13 @@ export async function notifyProviderResponse(
 
 function readServedHeader(headers: Headers, name: string | undefined): string | undefined {
 	if (!name) return undefined;
-	const raw = headers.get(name);
+	let raw: string | null;
+	try {
+		raw = headers.get(name);
+	} catch {
+		// An invalid header name (e.g. from a runtime-registered provider) must not fail the turn.
+		return undefined;
+	}
 	if (raw === null) return undefined;
 	const text = sanitizeText(raw).replace(/\s+/g, " ").trim();
 	if (text.length === 0) return undefined;
@@ -52,6 +58,7 @@ export function clearServedTarget(output: AssistantMessage): void {
 	output.upstreamProvider = undefined;
 	output.upstreamAccount = undefined;
 	output.upstreamFallbackAttempts = undefined;
+	output.upstreamFromHeaders = undefined;
 }
 
 /**
@@ -65,6 +72,7 @@ export function clearServedTarget(output: AssistantMessage): void {
 export function captureServedTarget(output: AssistantMessage, response: Response, model: Model<Api>): void {
 	const declared = model.servedHeaders;
 	if (!declared) return;
+	output.upstreamFromHeaders = true;
 	const { headers } = response;
 	output.upstreamModel = readServedHeader(headers, declared.model);
 	output.upstreamProvider = readServedHeader(headers, declared.provider);

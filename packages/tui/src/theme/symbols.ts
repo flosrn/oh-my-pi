@@ -82,6 +82,8 @@ export type SymbolKey =
 	| "icon.goal"
 	| "icon.pause"
 	| "icon.loop"
+	| "icon.served"
+	| "icon.servedHops"
 	| "icon.folder"
 	| "icon.worktree"
 	| "icon.search"
@@ -462,6 +464,8 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"icon.goal": "🎯",
 	"icon.pause": "⏸",
 	"icon.loop": "↻",
+	"icon.served": "→",
+	"icon.servedHops": "↻",
 	"icon.folder": "📁",
 	"icon.worktree": "🌳",
 	"icon.search": "🔍",
@@ -822,6 +826,10 @@ const NERD_SYMBOLS: SymbolMap = {
 	"icon.pause": "\uf04c",
 	// pick: ↻ | alt: ⟳
 	"icon.loop": "\uf021",
+	// Served-target arrow and router retry marker: plain text glyphs so the
+	// compact `requested→provider/model` form stays one cell per mark.
+	"icon.served": "→",
+	"icon.servedHops": "↻",
 	// pick:  | alt:  
 	"icon.folder": "\uf115",
 	"icon.search": "\uf002",
@@ -1242,6 +1250,8 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"icon.goal": "",
 	"icon.pause": "||",
 	"icon.loop": "loop",
+	"icon.served": "->",
+	"icon.servedHops": "x",
 	"icon.folder": "[D]",
 	"icon.worktree": "[wt]",
 	"icon.search": "[/]",

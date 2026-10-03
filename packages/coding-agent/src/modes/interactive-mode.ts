@@ -163,6 +163,7 @@ import {
 	isFeedModelBadgeEnabled,
 	previewLine,
 	replaceTabs,
+	servedModelParts,
 	shortenEmbeddedPaths,
 	shortenToolArgumentPaths,
 	shortenPath,
@@ -336,6 +337,8 @@ import {
 	cfgLoopConditionTimeoutMs,
 	cfgLoopMode,
 	cfgMagicKeywordsEnabled,
+	cfgModelDisplayAccountAliases,
+	cfgModelDisplayProviderAliases,
 	cfgRecapEnabled,
 	cfgRecapIdleSeconds,
 	cfgShowHardwareCursor,
@@ -438,6 +441,8 @@ const cfgLiveUiSettings = combine({
 	"statusLine.segmentOptions": cfgStatusLineSegmentOptions,
 	"statusLine.compactThinkingLevel": cfgStatusLineCompactThinkingLevel,
 	"statusLine.contextLine": cfgStatusLineContextLine,
+	"modelDisplay.accountAliases": cfgModelDisplayAccountAliases,
+	"modelDisplay.providerAliases": cfgModelDisplayProviderAliases,
 	"git.enabled": cfgGitEnabled,
 	"advisor.enabled": cfgAdvisorEnabled,
 	"advisor.maxNotesPerUpdate": cfgAdvisorMaxNotesPerUpdate,
@@ -1106,7 +1111,10 @@ export function renderSubagentHudLines(
 				const titleBudget = Math.max(0, rowWidth - visibleWidth(`${dot} ${displayId}${badge}`));
 				const modelBadge = showModelBadge
 					? formatFeedModelBadge(
-							session.progress?.resolvedModelIdentity ?? session.progress?.resolvedModel,
+							servedModelParts(
+								session.progress?.resolvedModelIdentity ?? session.progress?.resolvedModel,
+								session.progress?.served,
+							),
 							session.progress?.resolvedThinkingLevel,
 							session.progress?.advisor,
 							theme,
@@ -3542,6 +3550,8 @@ export class InteractiveMode implements InteractiveModeContext {
 				"statusLine.segmentOptions",
 				"statusLine.compactThinkingLevel",
 				"statusLine.contextLine",
+				"modelDisplay.accountAliases",
+				"modelDisplay.providerAliases",
 				"git.enabled",
 			)
 		) {
@@ -3571,6 +3581,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			segmentOptions: cfgStatusLineSegmentOptions.get(settings),
 			compactThinkingLevel: cfgStatusLineCompactThinkingLevel.get(settings),
 			contextLine: cfgStatusLineContextLine.get(settings),
+			accountAliases: cfgModelDisplayAccountAliases.get(settings),
+			providerAliases: cfgModelDisplayProviderAliases.get(settings),
 		});
 	}
 	syncComposerShape(): void {

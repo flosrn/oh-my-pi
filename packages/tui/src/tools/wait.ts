@@ -17,6 +17,7 @@ import {
 	isFeedModelBadgeEnabled,
 	PREVIEW_LIMITS,
 	replaceTabs,
+	servedModelParts,
 	type ToolUIColor,
 	type ToolUIStatus,
 	cappedHeadLines,
@@ -338,7 +339,7 @@ function jobsRenderResult(
 						const modelBadge =
 							job.type === "task" && showModelBadge && typeof modelIdentity === "string"
 								? formatFeedModelBadge(
-										modelIdentity,
+										servedModelParts(modelIdentity, job.served),
 										job.resolvedThinkingLevel,
 										job.advisor === true,
 										uiTheme,

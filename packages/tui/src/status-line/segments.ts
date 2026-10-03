@@ -11,7 +11,7 @@ import {
 	relativePathWithinNormalizedRoot,
 } from "@oh-my-pi/pi-utils";
 import { type SymbolKey, type Theme, type ThemeColor, theme } from "../theme";
-import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import { servedModelParts, shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
 import { fileHyperlink } from "../render/hyperlink";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../theme/session-color";
 import { summarizeLoopCondition } from "./loop";
@@ -335,6 +335,70 @@ function modelAdvisorBadge(ctx: SegmentContext): { icon: string; color: ThemeCol
 	return icon ? { icon, color } : undefined;
 }
 
+/**
+ * Last successfully settled assistant turn when it came from the selected
+ * model — the only turn the model segment's served tail describes — else
+ * `undefined`. An errored or aborted turn is skipped, as the Hub skips it, so
+ * it never replaces the target of the turn that actually served. A model
+ * whose provider declares no `servedHeaders` has none: its `upstream*` fields
+ * come from native inference (thinking signatures, OpenRouter, Devin), and
+ * the segment renders exactly as it did before served targets existed.
+ */
+export function servedTailTurn(ctx: SegmentContext) {
+	const { model, messages } = ctx.session.state;
+	if (!model?.servedHeaders || !messages) return undefined;
+	const last = messages.findLast(
+		m => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+	);
+	if (last?.role !== "assistant" || last.provider !== model.provider || last.model !== model.id) return undefined;
+	return last;
+}
+
+/**
+ * Served-target tail of the model segment, shown only while the last assistant
+ * turn came from the selected model, so a card switch renders exactly as before
+ * until the new card answers: ` → provider/model` unless the router served the
+ * card's declared `expectedUpstreamModel`, then ` · alias` and ` ↻N`. Parts the
+ * bar sheds to fit (`modelServedDrop`) are left out.
+ */
+function servedTailParts(ctx: SegmentContext): { target?: string; alias?: string; hops?: number } | undefined {
+	const drop = ctx.modelServedDrop ?? 0;
+	if (drop >= 3) return undefined;
+	const last = servedTailTurn(ctx);
+	if (!last) return undefined;
+	const parts = servedModelParts(
+		undefined,
+		{
+			provider: last.upstreamProvider,
+			model: last.upstreamModel,
+			account: last.upstreamAccount,
+			fallbackAttempts: last.upstreamFallbackAttempts,
+		},
+		ctx.modelDisplayAliases ?? {},
+	);
+	const showTarget =
+		drop < 1 && parts.servedModel && last.upstreamModel !== ctx.session.state.model?.expectedUpstreamModel;
+	return {
+		target: showTarget
+			? parts.servedProvider
+				? `${parts.servedProvider}/${parts.servedModel}`
+				: parts.servedModel
+			: undefined,
+		alias: parts.alias,
+		hops: drop < 2 ? parts.hops : undefined,
+	};
+}
+
+function servedModelTail(ctx: SegmentContext): string {
+	const served = servedTailParts(ctx);
+	if (!served) return "";
+	let tail = "";
+	if (served.target) tail += accentFg(ctx, "statusLineModel", ` ${theme.icon.served} ${served.target}`);
+	if (served.alias) tail += accentFg(ctx, "statusLineModel", theme.sep.dot) + accentFg(ctx, "accent", served.alias);
+	if (served.hops) tail += theme.fg("warning", ` ${theme.icon.servedHops}${served.hops}`);
+	return tail;
+}
+
 const modelSegment: StatusLineSegment = {
 	id: "model",
 	render(ctx) {
@@ -368,6 +432,7 @@ const modelSegment: StatusLineSegment = {
 		if (tail) {
 			content += accentFg(ctx, "statusLineModel", tail);
 		}
+		content += servedModelTail(ctx);
 
 		// Anthropic usage-limit stage (wrap-up allowance or low priority): a
 		// warning-colored badge so past-the-limit service is never mistaken for normal.
@@ -385,6 +450,10 @@ const modelSegment: StatusLineSegment = {
 		if (ctx.session.isFastModeActive() && theme.icon.fast) spans.push(span(` ${theme.icon.fast}`, token));
 		const level = ctx.options.model?.showThinkingLevel === false ? undefined : thinkingLevelWord(ctx.session);
 		if (level !== undefined) spans.push(span(" · ", "dim"), span(level, thinkingLevelToken(level)));
+		const served = servedTailParts(ctx);
+		if (served?.target) spans.push(span(` ${theme.icon.served} ${served.target}`, token));
+		if (served?.alias) spans.push(span(theme.sep.dot, token), span(served.alias, accentToken(ctx, "accent")));
+		if (served?.hops) spans.push(span(` ${theme.icon.servedHops}${served.hops}`, "warning"));
 		const slowModeLabel = ctx.session.getAnthropicSlowModeLabel?.();
 		if (slowModeLabel) spans.push(span(`${theme.sep.dot}${slowModeLabel}`, "warning"));
 		return segView(spans, "model", slowModeLabel ? "warning" : undefined);

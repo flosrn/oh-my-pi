@@ -1,6 +1,7 @@
 import type { Model } from "@oh-my-pi/pi-ai";
 import type { SessionState, TspSpan, TspTone } from "@oh-my-pi/pi-wire";
 import type { NativeNode, NativeUiEvent } from "../native/node";
+import type { ModelDisplayAliases } from "../render/render-utils";
 import type { ContextLineMode, StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "./schema";
 import type { ActiveRepoContext, StatusLineSession } from "./host";
 import type { LoopConditionConfig, LoopLimitRuntime } from "./loop";
@@ -42,7 +43,7 @@ export interface StatusLineSegmentOptions {
 	time?: { format?: "12h" | "24h"; showSeconds?: boolean };
 }
 
-export interface StatusLineSettings {
+export interface StatusLineSettings extends ModelDisplayAliases {
 	preset?: StatusLinePreset;
 	leftSegments?: StatusLineSegmentId[];
 	rightSegments?: StatusLineSegmentId[];
@@ -90,6 +91,13 @@ export interface SegmentContext {
 	options: StatusLineSegmentOptions;
 	/** Render the model segment's thinking level as a compact leading glyph. */
 	compactThinkingLevel: boolean;
+	/** Alias maps resolving the served account and provider on the model segment. */
+	modelDisplayAliases?: ModelDisplayAliases;
+	/**
+	 * Served parts the model segment drops to fit a narrow bar: 1 drops the
+	 * `→ provider/model` part, 2 also the `↻N` marker, 3 also the alias.
+	 */
+	modelServedDrop?: number;
 	/** Key-sorted extension/hook status values. Segment renderers sanitize before display. */
 	hookStatuses?: readonly string[];
 	planMode: {

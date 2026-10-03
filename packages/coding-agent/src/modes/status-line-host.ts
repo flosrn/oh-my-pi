@@ -9,6 +9,8 @@ import { calculateTokensPerSecond } from "../utils/token-rate";
 
 import {
 	cfgGitEnabled,
+	cfgModelDisplayAccountAliases,
+	cfgModelDisplayProviderAliases,
 	cfgStatusLineCompactThinkingLevel,
 	cfgStatusLineContextLine,
 	cfgStatusLineLeftSegments,
@@ -44,6 +46,8 @@ export const statusLineHost: StatusLineHost<StatusLineHostSession> = {
 		transparent: cfgStatusLineTransparent.get(settings),
 		compactThinkingLevel: cfgStatusLineCompactThinkingLevel.get(settings),
 		contextLine: cfgStatusLineContextLine.get(settings),
+		accountAliases: cfgModelDisplayAccountAliases.get(settings),
+		providerAliases: cfgModelDisplayProviderAliases.get(settings),
 	}),
 	gitEnabled: () => cfgGitEnabled.get(settings),
 	codexResetFireworksEnabled: () => cfgTuiCodexResetFireworks.get(settings),

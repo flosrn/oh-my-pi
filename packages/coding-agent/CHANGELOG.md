@@ -331,6 +331,9 @@
 ### Removed
 
 - Removed the bash tool's `env` parameter; services inherit the configured shell environment
+### Added
+
+- Show the provider, model, and account a router reports as serving each turn on the status line, Agent Hub, and job rows, with `modelDisplay.accountAliases`/`modelDisplay.providerAliases` for short names.
 
 ## [18.4.3] - 2026-09-28
 

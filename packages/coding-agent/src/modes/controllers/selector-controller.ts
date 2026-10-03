@@ -126,6 +126,8 @@ import { cfgBranchSummaryEnabled } from "../../session/context-settings";
 import { cfgCycleOrder, cfgDisabledProviders, cfgModelRoleStorage } from "../../config/model-settings";
 import { cfgDefaultThinkingLevel, cfgRetryFallbackChains } from "../../session/settings";
 import {
+	cfgModelDisplayAccountAliases,
+	cfgModelDisplayProviderAliases,
 	cfgStatusLineCompactThinkingLevel,
 	cfgStatusLineContextLine,
 	cfgStatusLineLeftSegments,
@@ -298,6 +300,8 @@ export class SelectorController {
 							compactThinkingLevel: cfgStatusLineCompactThinkingLevel.get(settings),
 							contextLine: cfgStatusLineContextLine.get(settings),
 							segmentOptions: cfgStatusLineSegmentOptions.get(settings),
+							accountAliases: cfgModelDisplayAccountAliases.get(settings),
+							providerAliases: cfgModelDisplayProviderAliases.get(settings),
 							...previewSettings,
 						});
 						this.ctx.ui.requestRender();
@@ -331,6 +335,8 @@ export class SelectorController {
 							compactThinkingLevel: cfgStatusLineCompactThinkingLevel.get(settings),
 							contextLine: cfgStatusLineContextLine.get(settings),
 							segmentOptions: cfgStatusLineSegmentOptions.get(settings),
+							accountAliases: cfgModelDisplayAccountAliases.get(settings),
+							providerAliases: cfgModelDisplayProviderAliases.get(settings),
 						});
 						this.ctx.ui.requestRender();
 					},

@@ -38,7 +38,7 @@ import {
 import { canReuseCachedPr, createPrCacheContext, isSamePrCacheContext, type PrCacheContext } from "./git-utils";
 import { summarizeUsageResetCredits } from "../overlays/usage-display";
 import { getPreset } from "./presets";
-import { describeSegment, renderSegment, type SegmentContext } from "./segments";
+import { describeSegment, renderSegment, type SegmentContext, servedTailTurn } from "./segments";
 import type { TspMeterMark, TspProps } from "@oh-my-pi/pi-wire";
 import type { NativeNode, NativeUiEvent } from "../native/node";
 import { col, node, span } from "../native/describe";
@@ -2380,6 +2380,8 @@ export class StatusLineComponent<TSession extends StatusLineSession = StatusLine
 			width,
 			options: segmentOptions ?? {},
 			compactThinkingLevel: this.#resolveSettings().compactThinkingLevel ?? false,
+			// The effective settings carry both alias maps under the fields the model segment reads.
+			modelDisplayAliases: this.#resolveSettings(),
 			hookStatuses: this.#sortedHookStatuses,
 			planMode: this.#planModeStatus,
 			loopMode: this.#loopModeStatus,
@@ -2878,6 +2880,37 @@ export class StatusLineComponent<TSession extends StatusLineSession = StatusLine
 					rightWidths[nameIdx] = nameWidth;
 				}
 			}
+			// The model segment's served parts shed before whole segments do: the
+			// `→ provider/model` part first, then `↻N`; the alias waits until the
+			// path has shrunk too. Located now, before right-side pops leave
+			// `rightSegIds` stale.
+			const modelLeftIdx = leftSegIds.indexOf("model");
+			const modelRightIdx = rightSegIds.indexOf("model");
+			const modelOnLeft = modelLeftIdx >= 0;
+			const modelIdx = modelOnLeft
+				? modelLeftIdx
+				: modelRightIdx >= 0
+					? modelRightIdx + (right.length - rightSegIds.length)
+					: -1;
+			// Without a served tail every drop level renders the same segment.
+			const modelHasServedTail = modelIdx >= 0 && servedTailTurn(ctx) !== undefined;
+			let modelServedDrop = 0;
+			const shedModelServedParts = (maxDrop: number): void => {
+				const parts = modelOnLeft ? left : right;
+				const widths = modelOnLeft ? leftWidths : rightWidths;
+				if (!modelHasServedTail || modelIdx >= parts.length) return;
+				while (totalWidth() > topFillWidth && modelServedDrop < maxDrop) {
+					modelServedDrop++;
+					const content = renderSegment("model", { ...ctx, modelServedDrop }).content;
+					const contentWidth = visibleWidth(content);
+					const delta = contentWidth - widths[modelIdx];
+					parts[modelIdx] = content;
+					widths[modelIdx] = contentWidth;
+					if (modelOnLeft) leftWidth += delta;
+					else rightWidth += delta;
+				}
+			};
+			shedModelServedParts(2);
 			while (totalWidth() > topFillWidth && right.length > 0) {
 				const removedWidth = rightWidths[right.length - 1];
 				right.pop();
@@ -2920,6 +2953,7 @@ export class StatusLineComponent<TSession extends StatusLineSession = StatusLine
 					}
 				}
 			}
+			shedModelServedParts(3);
 			const leftOverflowDropIndex = (): number => {
 				// Preserve the current working directory as long as possible. The
 				// previous right-to-left pop could collapse a normal-width bar to

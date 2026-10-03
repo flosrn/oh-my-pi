@@ -7,9 +7,9 @@ import { renderProgressBar } from "../components/progress-bar";
 import { renderTableRow } from "../components/table";
 import { formatDuration, formatNumber } from "@oh-my-pi/pi-utils";
 import type { ThemeColor } from "../theme/theme";
-import { type AgentRecordLike, type AgentStatus, MAIN_AGENT_ID } from "./agent-hub-types";
+import { type AgentRecordLike, type AgentStatus, MAIN_AGENT_ID, type ServedTarget } from "./agent-hub-types";
 import { parseThinkingLevel } from "../thinking";
-import { TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import { servedModelParts, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
 import { sanitizeDisplaySingleLine } from "./extensions/display-text";
 import type { ObservableSession } from "./session-observer-registry";
 import { theme } from "../theme/theme";
@@ -112,9 +112,23 @@ function showsThinkingLevel(level: ThinkingLevel | undefined): level is Exclude<
 	return level !== undefined && level !== ThinkingLevel.Off && level !== ThinkingLevel.Inherit;
 }
 
-/** Model id + thinking level (`sonnet-4-6 ◒ high`), level colored per theme. */
-function formatModelBadge(modelId: string, level: ThinkingLevel | undefined): string {
-	const model = theme.fg("muted", sanitizeDisplaySingleLine(modelId));
+/** The router-reported `provider/model` a row's model badge reads after the model, and its alias. */
+function servedBadgeParts(served: ServedTarget | undefined): { target?: string; alias?: string } {
+	const parts = servedModelParts(undefined, served);
+	if (!parts.servedModel) return { alias: parts.alias };
+	const target = parts.servedProvider ? `${parts.servedProvider}/${parts.servedModel}` : parts.servedModel;
+	return { target, alias: parts.alias };
+}
+
+/**
+ * Model id + thinking level (`sonnet-4-6 ◒ high`), level colored per theme. A
+ * served target reads after the model: `task → cx/gpt-6-sol · alias ◒ high`.
+ */
+function formatModelBadge(modelId: string, level: ThinkingLevel | undefined, served?: ServedTarget): string {
+	let model = theme.fg("muted", sanitizeDisplaySingleLine(modelId));
+	const { target, alias } = servedBadgeParts(served);
+	if (target) model += theme.fg("muted", ` ${theme.icon.served} ${target}`);
+	if (alias) model += theme.fg("muted", theme.sep.dot) + theme.fg("accent", alias);
 	if (!showsThinkingLevel(level)) return model;
 	const display = theme.thinking[level] ?? level;
 	return `${model} ${theme.getThinkingBorderColor(level)(display)}`;
@@ -156,11 +170,15 @@ export function roleBadgeSpan(role: string, info: AgentRoleDisplay): TspSpan {
 	return span(sanitizeDisplaySingleLine(info.tag ?? info.name ?? role), info.color ?? "muted");
 }
 
-/** Model label and reasoning level a hub row reports; `fallback` marks a fallback model serving. */
+/**
+ * Model label, reasoning level and router-reported served target a hub row
+ * reports; `fallback` marks a fallback model serving.
+ */
 interface ResolvedModelBadge {
 	model: string;
 	level: ThinkingLevel | undefined;
 	fallback: boolean;
+	served?: ServedTarget;
 }
 
 /** Resolve a selector, preserving provider identity when requested. */
@@ -169,6 +187,7 @@ function resolveSelectorBadge(
 	fallback: boolean,
 	preserveProvider: boolean,
 	fallbackLevel: ThinkingLevel | undefined,
+	served?: ServedTarget,
 ): ResolvedModelBadge {
 	const cleanResolved = sanitizeDisplaySingleLine(resolved);
 	// Model ids may themselves contain colons (`qwen3:14b`), so only treat the
@@ -177,7 +196,7 @@ function resolveSelectorBadge(
 	const explicitLevel = colon >= 0 ? parseThinkingLevel(cleanResolved.slice(colon + 1)) : undefined;
 	const selector = explicitLevel !== undefined ? cleanResolved.slice(0, colon) : cleanResolved;
 	const label = preserveProvider ? selector : selector.slice(selector.indexOf("/") + 1);
-	return { model: label, level: explicitLevel ?? fallbackLevel, fallback };
+	return { model: label, level: explicitLevel ?? fallbackLevel, fallback, served };
 }
 
 /**
@@ -188,7 +207,9 @@ function resolveSelectorBadge(
  *
  * Every source reports the model that produced the row's work, never the one
  * the session merely points at: an armed fallback that has not served yet stays
- * attributed to whichever model last actually spoke.
+ * attributed to whichever model last actually spoke. A router-reported served
+ * target is read from the same source as the resolved model and follows it;
+ * the retry-chain `fallback →` form never carries one.
  */
 function resolveModelBadge(
 	ref: AgentRecordLike,
@@ -202,8 +223,15 @@ function resolveModelBadge(
 		(progress?.resolvedModelIsFallback ? progress.resolvedModel : undefined) ??
 		(ref.history?.resolvedModelIsFallback ? ref.history.resolvedModel : undefined);
 	if (fallbackSelector) return resolveSelectorBadge(fallbackSelector, true, true, liveThinkingLevel);
-	const resolvedModel = progress?.resolvedModel ?? ref.history?.resolvedModel ?? serving?.selector;
-	if (resolvedModel) return resolveSelectorBadge(resolvedModel, false, false, liveThinkingLevel);
+	const source =
+		progress?.resolvedModel != null
+			? progress
+			: ref.history?.resolvedModel != null
+				? ref.history
+				: serving && { resolvedModel: serving.selector, served: serving.served };
+	if (source?.resolvedModel) {
+		return resolveSelectorBadge(source.resolvedModel, false, false, liveThinkingLevel, source.served);
+	}
 	const model = ref.session?.model;
 	if (!model) return undefined;
 	return { model: model.id, level: model.thinking ? liveThinkingLevel : undefined, fallback: false };
@@ -212,7 +240,7 @@ function resolveModelBadge(
 export function modelBadge(ref: AgentRecordLike, observed: ObservableSession | undefined): string | undefined {
 	const badge = resolveModelBadge(ref, observed);
 	if (!badge) return undefined;
-	const text = formatModelBadge(badge.model, badge.level);
+	const text = formatModelBadge(badge.model, badge.level, badge.served);
 	return badge.fallback ? `${theme.fg("warning", "fallback →")} ${text}` : text;
 }
 
@@ -245,6 +273,9 @@ export function modelBadgeSpans(ref: AgentRecordLike, observed: ObservableSessio
 	const spans: TspSpan[] = [];
 	if (badge.fallback) spans.push(span("fallback → ", "warning"));
 	spans.push(span(sanitizeDisplaySingleLine(badge.model), "muted"));
+	const { target, alias } = servedBadgeParts(badge.served);
+	if (target) spans.push(span(` ${theme.icon.served} ${target}`, "muted"));
+	if (alias) spans.push(span(theme.sep.dot, "muted"), span(alias, "accent"));
 	if (showsThinkingLevel(badge.level)) {
 		spans.push(span(` ${theme.thinking[badge.level] ?? badge.level}`, thinkingToken(badge.level)));
 	}
