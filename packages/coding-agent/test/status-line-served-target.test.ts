@@ -96,6 +96,14 @@ describe("status line served target on a narrow bar", () => {
 
 		expect(modelGroup(modelOnlyBar([servedTurn]), Bun.stringWidth(aliasOnly) - 1)).toBe(bare);
 	});
+
+	it("the native bar carries the served target, alias and hop marker", () => {
+		const native = JSON.stringify(modelOnlyBar([servedTurn]).describePreview());
+		expect(native).toContain(`${theme.icon.served} cx/gpt-6-sol`);
+		expect(native).toContain('"t":"a"');
+		expect(native).toContain(`${theme.icon.servedHops}1`);
+		expect(JSON.stringify(modelOnlyBar([]).describePreview())).not.toContain("cx/gpt-6-sol");
+	});
 });
 
 describe("InteractiveMode status line after an alias edit", () => {

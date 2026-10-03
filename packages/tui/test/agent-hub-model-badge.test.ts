@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { modelBadge } from "../src/overlays/agent-hub-renderer";
+import { modelBadge, modelBadgeSpans } from "../src/overlays/agent-hub-renderer";
 import type { AgentRecordLike, ServedTarget } from "../src/overlays/agent-hub-types";
 import type { ObservableSession } from "../src/overlays/session-observer-registry";
 import { setModelDisplayAliases } from "../src/render/render-utils";
@@ -42,6 +42,17 @@ describe("agent hub model badge served target", () => {
 		const badge = modelBadge(record(), observed({ resolvedModel: "router/task", served: codex }));
 		expect(Bun.stripANSI(badge ?? "")).toBe(`task → cx/gpt-6-sol${theme.sep.dot}a ${theme.thinking.medium}`);
 		expect(badge).toContain(theme.fg("accent", "a"));
+	});
+
+	it("native spans carry the same served target and alias as the text badge", () => {
+		setModelDisplayAliases({ accountAliases: { "alice@example.com": "a" } });
+		const ref = record(),
+			progress = observed({ resolvedModel: "router/task", served: codex });
+		const native = modelBadgeSpans(ref, progress)!
+			.map(part => part.t)
+			.join("");
+		expect(native).toBe(Bun.stripANSI(modelBadge(ref, progress) ?? ""));
+		expect(native).toContain("→ cx/gpt-6-sol");
 	});
 
 	it("shows a handle's served model even when it is the expected one, and never hops", () => {
